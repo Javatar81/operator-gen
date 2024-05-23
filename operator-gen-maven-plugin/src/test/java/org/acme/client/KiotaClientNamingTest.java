@@ -3,10 +3,13 @@ package org.acme.client;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Map.Entry;
 import java.util.Optional;
 
+import org.acme.Configuration;
 import org.acme.read.crud.CrudMapper;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,14 +56,14 @@ class KiotaClientNamingTest {
 	@BeforeEach
 	void setUp() {
 		mapper = Mockito.mock(CrudMapper.class);
-		client = new KiotaMethodCallFactory(mapper);
+		client = new KiotaMethodCallFactory(mapper, new ParameterResolver(new Configuration(ConfigProvider.getConfig(), new ArrayList<>())));
 	}
 
 	@Test
 	void findByIdMethodCall() {
 		Mockito.when(mapper.getByIdPath()).thenReturn(Optional.of(new TestEntry<String,PathItem>("/users/{username}", null)));
 		mapper.getByIdPath();
-		Optional<MethodCallExpr> byIdMethodCall = client.findById(new NameExpr("client"), new NodeList<>(new NameExpr("username")));
+		Optional<MethodCallExpr> byIdMethodCall = client.findById(new NameExpr("client"), new NameExpr("username"), new NodeList<>(new NameExpr("username")));
 		assertTrue(byIdMethodCall.isPresent());
 		assertEquals("client.users().byUsername(username)", byIdMethodCall.get().toString());
 	}
@@ -69,7 +72,7 @@ class KiotaClientNamingTest {
 	void createMethodCall() {
 		Mockito.when(mapper.createPath()).thenReturn(Optional.of(new TestEntry<String,PathItem>("/users", null)));
 		mapper.getByIdPath();
-		Optional<MethodCallExpr> byIdMethodCall = client.create(new NameExpr("client"), new NodeList<>(), new NodeList<>(new NameExpr("createUserOpt")));
+		Optional<MethodCallExpr> byIdMethodCall = client.create(new NameExpr("client"), new NameExpr("createUserOpt"), new NodeList<>(), new NodeList<>(new NameExpr("createUserOpt")));
 		assertTrue(byIdMethodCall.isPresent());
 		assertEquals("client.users().post(createUserOpt)", byIdMethodCall.get().toString());
 	}

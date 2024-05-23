@@ -176,7 +176,7 @@ public class DependentGen {
 				.addAnnotation(Override.class)
 				.addParameter(crdType, "primary")
 				.addParameter(contextType, "context");
-		methodCalls.delete(new NameExpr(FIELD_API_CLIENT),
+		methodCalls.delete(new NameExpr(FIELD_API_CLIENT), new NameExpr("primary"),
 				new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primary"), "getMetadata"),
 						"getName")))
 		.ifPresent(m -> deleteMethod.setBody(new BlockStmt(new NodeList<>(new ExpressionStmt(m)))));
@@ -236,7 +236,7 @@ public class DependentGen {
 				.addParameter(crdType, "primary")
 				.addParameter(contextType, "context")
 				.setType(resourceType);
-		Optional<MethodCallExpr> createCall = methodCalls.create(new NameExpr(FIELD_API_CLIENT), new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primary"), "getMetadata"),
+		Optional<MethodCallExpr> createCall = methodCalls.create(new NameExpr(FIELD_API_CLIENT), new NameExpr("primary"), new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primary"), "getMetadata"),
 				"getName")),
 				new NodeList<>(new NameExpr("createOption")));
 		AssignExpr assignCreateOpt = new AssignExpr(new VariableDeclarationExpr(createOptionType, "createOption"), new MethodCallExpr(null, "fromResource", new NodeList<>(new NameExpr("primary"), new MethodReferenceExpr(new TypeExpr(createOptionType), new NodeList<>(),"createFromDiscriminatorValue"))),Operator.ASSIGN);
@@ -255,7 +255,7 @@ public class DependentGen {
 				.addParameter(crdType, "primary")
 				.addParameter(contextType, "context")
 				.setType(resourceType);
-		Optional<MethodCallExpr> updateCall = methodCalls.update(new NameExpr(FIELD_API_CLIENT),
+		Optional<MethodCallExpr> updateCall = methodCalls.update(new NameExpr(FIELD_API_CLIENT), new NameExpr("primary"),
 				new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primary"), "getMetadata"),
 						"getName")),
 				new NodeList<>(new NameExpr("editOption")));
@@ -287,7 +287,7 @@ public class DependentGen {
 	}
 
 	private void setFetchResourcesBody(ClassOrInterfaceType setType, MethodDeclaration fetchResourcesMethod) {
-		methodCalls.findById(new NameExpr(FIELD_API_CLIENT),
+		methodCalls.findById(new NameExpr(FIELD_API_CLIENT), new NameExpr("primaryResource"),
 				new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primaryResource"), "getMetadata"),
 						"getName")))
 				.ifPresent(m -> fetchResourcesMethod

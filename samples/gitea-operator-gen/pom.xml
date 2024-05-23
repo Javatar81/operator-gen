@@ -107,7 +107,13 @@
 	                <artifactId>operator-gen-maven-plugin</artifactId>
 	                <version>1.0-SNAPSHOT</version>
                 	 <configuration>
-			          <schemas>Organization,User,Repository,Comment</schemas>
+			          <schemas>Organization,User,Repository</schemas>
+			          <pathParamMappings>/orgs/{org}=spec.username,
+						  /repos/{owner}/{repo}=status.owner.login,
+						  /admin/users/{username}/repos=status.owner.login,
+						  /repos/{owner}/{repo}/issues/comments/{id}=status.user.login|spec.repo|status.id,
+						  /repos/{owner}/{repo}/issues/{index}/comments=status.user.login|spec.repo|status.id
+					  </pathParamMappings>
 			          <!-- .. .-->
 			        </configuration>
                 </plugin>

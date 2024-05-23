@@ -14,41 +14,43 @@ import com.github.javaparser.ast.expr.NameExpr;
 public class KiotaMethodCallFactory implements ApiClientMethodCallFactory {
 	
 	private final CrudMapper mapper;
+	private final ParameterResolver resolver;
 
-	public KiotaMethodCallFactory(CrudMapper mapper) {
+	public KiotaMethodCallFactory(CrudMapper mapper, ParameterResolver resolver) {
 		this.mapper = mapper;
+		this.resolver = resolver;
 	}
 	
 	@Override
-	public Optional<MethodCallExpr> findById(NameExpr apiClient, NodeList<Expression> args) {
+	public Optional<MethodCallExpr> findById(NameExpr apiClient, NameExpr primary, NodeList<Expression> args) {
 		Optional<Entry<String, PathItem>> byIdPath = mapper.getByIdPath();
 		return byIdPath
 				.map(Entry::getKey)
-				.map(k -> toMethodCallExpression(apiClient, k, args));
+				.map(k -> toMethodCallExpression(apiClient, k, resolver.resolveArgs(k, primary, args)));
 	}
 	
 	@Override
-	public Optional<MethodCallExpr> create(NameExpr apiClient, NodeList<Expression> byIdArgs, NodeList<Expression> postArgs) {
+	public Optional<MethodCallExpr> create(NameExpr apiClient, NameExpr primary, NodeList<Expression> byIdArgs, NodeList<Expression> postArgs) {
 		Optional<Entry<String, PathItem>> createPath = mapper.createPath();
 		return createPath
 				.map(Entry::getKey)
-				.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, byIdArgs), "post", new NodeList<>(postArgs)));
+				.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, resolver.resolveArgs(k, primary, byIdArgs)), "post", new NodeList<>(postArgs)));
 	}
 	
 	@Override
-	public Optional<MethodCallExpr> update(NameExpr apiClient, NodeList<Expression> byIdArgs, NodeList<Expression> patchArgs) {
+	public Optional<MethodCallExpr> update(NameExpr apiClient, NameExpr primary, NodeList<Expression> byIdArgs, NodeList<Expression> patchArgs) {
 		Optional<Entry<String, PathItem>> patchPath = mapper.patchPath();
 		return patchPath
 				.map(Entry::getKey)
-				.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, byIdArgs), "patch", new NodeList<>(patchArgs)));
+				.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, resolver.resolveArgs(k, primary, byIdArgs)), "patch", new NodeList<>(patchArgs)));
 	}
 	
 	@Override
-	public Optional<MethodCallExpr> delete(NameExpr apiClient, NodeList<Expression> byIdArgs) {
+	public Optional<MethodCallExpr> delete(NameExpr apiClient, NameExpr primary, NodeList<Expression> byIdArgs) {
 		Optional<Entry<String, PathItem>> delete = mapper.deletePath();
 		return delete
 				.map(Entry::getKey)
-				.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, byIdArgs), "delete", new NodeList<>()));
+				.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, resolver.resolveArgs(k, primary, byIdArgs)), "delete", new NodeList<>()));
 	}
 	
 	private MethodCallExpr toMethodCallExpression(Expression prev, String pathKey, NodeList<Expression> args) {		
@@ -63,7 +65,7 @@ public class KiotaMethodCallFactory implements ApiClientMethodCallFactory {
 		MethodCallExpr methodCallExpr;
 		if (methodName.startsWith("{")) {
 			methodName = "by" + Character.toUpperCase(methodName.charAt(1)) + methodName.substring(2, methodName.length() - 1);
-			methodCallExpr = new MethodCallExpr(prev, methodName, args);
+			methodCallExpr = new MethodCallExpr(prev, methodName, args.size() > 1 ? new NodeList<>(args.remove(0)) : args);
 		} else {
 			methodCallExpr = new MethodCallExpr(prev, methodName);
 		}

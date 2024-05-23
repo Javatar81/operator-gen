@@ -12,6 +12,7 @@ import java.util.List;
 
 import org.acme.client.ApiClientMethodCallFactory;
 import org.acme.client.KiotaMethodCallFactory;
+import org.acme.client.ParameterResolver;
 import org.acme.gen.CrdResourceGen;
 import org.acme.gen.DependentGen;
 import org.acme.gen.ReconcilerGen;
@@ -54,6 +55,9 @@ public class OperatorGenMojo
 	@Parameter(property = "schemas", required = false)
 	private List<String> schemas = null;
 	
+	@Parameter(property = "pathParamMappings", required = false)
+	private List<String> pathParamMappings = null;
+	
     /**
      * Location of the generated source code.
      */
@@ -71,12 +75,13 @@ public class OperatorGenMojo
     
     
     public OperatorGenMojo() {
-    	config = new Configuration(ConfigProvider.getConfig());
+    	
     }
     
     public void execute()
         throws MojoExecutionException
     {
+    	config = new Configuration(ConfigProvider.getConfig(), pathParamMappings);
         File f = sourceDestinationFolder;
         if ( !f.exists() )
         {
@@ -107,7 +112,7 @@ public class OperatorGenMojo
 		String crdVersion = config.getCrdVersion();
 		String basePackage = config.getCrdPackage();
 		ResponseTypeMapper mapper = new ResponseTypeMapper(openApiDoc, responseType);
-		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper);
+		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper, new ParameterResolver(config));
 		String className = responseType.substring(0, 1).toUpperCase() + responseType.substring(1);
 		Name crdName = new Name(new Name(basePackage), className);
 		try {
