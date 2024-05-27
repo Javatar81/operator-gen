@@ -43,6 +43,12 @@ public class ResponseTypeMapper implements CrudMapper {
 	public Schema getByIdSchema() {
 		return schema;
 	}
+	
+	public boolean isArrayType() {
+		return Optional.ofNullable(schema.getType())
+			.filter(t -> "array".equalsIgnoreCase(t.name()))
+			.isPresent();
+	}
 
 	private Optional<Schema> getSchema(String modelName) {
 		return Optional.ofNullable(api.getComponents().getResponses().get(modelName).getContent()
@@ -175,6 +181,7 @@ public class ResponseTypeMapper implements CrudMapper {
 		return e.getValue().getGET() != null && e.getValue().getGET().getResponses().getAPIResponse("200") != null
 				&& e.getValue().getGET().getResponses().getAPIResponse("200").getContent()
 						.getMediaType(getResponseMediaType()) != null
+				&& schema.getRef() != null
 				&& Objects.equals(schema.getRef(), e.getValue().getGET().getResponses().getAPIResponse("200")
 						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
 	}
@@ -183,6 +190,7 @@ public class ResponseTypeMapper implements CrudMapper {
 		return e.getValue().getPATCH() != null && e.getValue().getPATCH().getResponses().getAPIResponse("200") != null
 				&& e.getValue().getPATCH().getResponses().getAPIResponse("200").getContent()
 						.getMediaType(getResponseMediaType()) != null
+				&& schema.getRef() != null
 				&& Objects.equals(schema.getRef(), e.getValue().getPATCH().getResponses().getAPIResponse("200")
 						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
 	}
@@ -191,6 +199,7 @@ public class ResponseTypeMapper implements CrudMapper {
 		return e.getValue().getPOST() != null && e.getValue().getPOST().getResponses().getAPIResponse("201") != null
 				&& e.getValue().getPOST().getResponses().getAPIResponse("201").getContent()
 						.getMediaType(getResponseMediaType()) != null
+				&& schema.getRef() != null
 				&& Objects.equals(schema.getRef(), e.getValue().getPOST().getResponses().getAPIResponse("201")
 						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
 	}

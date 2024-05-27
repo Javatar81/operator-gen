@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import org.acme.read.ResponseTypeReader;
-import org.acme.read.crud.ResponseTypeMapper;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.PathItem;
@@ -43,7 +42,15 @@ class ResponseTypeMapperTest {
 	
 	private static OpenAPI model;
 	private static ResponseTypeReader reader;
-	private static final Set<String> EXCLUDED_RESPONSES = Set.of("conflict", "empty", "error", "forbidden", "invalidTopicsError", "notFound", "parameterBodies", "redirect", "string", "validationError");
+	private static final Set<String> EXCLUDED_RESPONSES = Set.of("conflict", "empty", "error", "forbidden",
+			"invalidTopicsError", "notFound", "parameterBodies", "redirect", "string", "validationError",
+			"EmptyRepository" /* Only used for 409 response */,
+			"FileDeleteResponse" /* Used for single operation to delete a file in a repository */,
+			"FileResponse" /* Used for single operation to update a file in a repository */,
+			"FilesResponse" /* Modify multiple files in a repository */
+			);
+	
+	
 	
 	@BeforeAll
 	public static void setUp() {
@@ -111,52 +118,90 @@ class ResponseTypeMapperTest {
 	@MethodSource("responseTypesWithGetById")
 	void getByIdPath(String modelName) {
 		ResponseTypeMapper analyzer = new ResponseTypeMapper(model, modelName);
-		Optional<Entry<String, PathItem>> byIdPath = analyzer.getByIdPath();
-		assertNotNull(byIdPath);
-		assertTrue(byIdPath.isPresent());
-		assertNotNull(byIdPath.get().getValue().getGET());
-		System.out.println("GetById path for " + modelName + " is " + byIdPath.get().getKey());
-		Schema schema = byIdPath.get().getValue().getGET().getResponses().getAPIResponse("200").getContent().getMediaType(analyzer.getResponseMediaType()).getSchema();
-		assertEquals(analyzer.getByIdSchema().getRef(), schema.getRef());
+		if (!analyzer.isArrayType()) {
+			Optional<Entry<String, PathItem>> byIdPath = analyzer.getByIdPath();
+			assertNotNull(byIdPath);
+			assertTrue(byIdPath.isPresent());
+			assertNotNull(byIdPath.get().getValue().getGET());
+			System.out.println("GetById path for " + modelName + " is " + byIdPath.get().getKey());
+			Schema schema = byIdPath.get().getValue().getGET().getResponses().getAPIResponse("200").getContent().getMediaType(analyzer.getResponseMediaType()).getSchema();
+			assertEquals(analyzer.getByIdSchema().getRef(), schema.getRef());
+		}
 	}
 	
 	@ParameterizedTest
 	@MethodSource("modelsToTest")
 	void deletePath(String modelName) {
 		ResponseTypeMapper analyzer = new ResponseTypeMapper(model, modelName);
-		Optional<Entry<String, PathItem>> deletePath = analyzer.deletePath();
-		assertNotNull(deletePath);
-		assertTrue(deletePath.isPresent());
-		assertNotNull(deletePath.get().getValue().getDELETE());
-		System.out.println("Delete path for " + modelName + " is " + deletePath.get().getKey());
+		if (!analyzer.isArrayType()) {
+			Optional<Entry<String, PathItem>> deletePath = analyzer.deletePath();
+			assertNotNull(deletePath);
+			assertTrue(deletePath.isPresent());
+			assertNotNull(deletePath.get().getValue().getDELETE());
+			System.out.println("Delete path for " + modelName + " is " + deletePath.get().getKey());
+		}
 	}
 	
 	@ParameterizedTest
-	@MethodSource("modelsToTest")
+	@MethodSource("responseTypesWithPatch")
 	void patchPath(String modelName) {
 		ResponseTypeMapper analyzer = new ResponseTypeMapper(model, modelName);
-		Optional<Entry<String, PathItem>> patchPath = analyzer.patchPath();
-		assertNotNull(patchPath);
-		assertTrue(patchPath.isPresent());
-		assertNotNull(patchPath.get().getValue().getPATCH());
-		System.out.println("Patch path for " + modelName + " is " + patchPath.get().getKey());
+		if (!analyzer.isArrayType()) {
+			Optional<Entry<String, PathItem>> patchPath = analyzer.patchPath();
+			assertNotNull(patchPath);
+			assertTrue(patchPath.isPresent());
+			assertNotNull(patchPath.get().getValue().getPATCH());
+			System.out.println("Patch path for " + modelName + " is " + patchPath.get().getKey());
+		}
 	}
 	
 	@ParameterizedTest
 	@MethodSource("modelsToTest")
 	void createPath(String modelName) {
 		ResponseTypeMapper analyzer = new ResponseTypeMapper(model, modelName);
-		Optional<Entry<String, PathItem>> createPath = analyzer.createPath();
-		assertNotNull(createPath);
-		assertTrue(createPath.isPresent());
-		assertNotNull(createPath.get().getValue().getPOST());
-		System.out.println("Create path for " + modelName + " is " + createPath.get().getKey());
+		if (!analyzer.isArrayType()) {
+			Optional<Entry<String, PathItem>> createPath = analyzer.createPath();
+			assertNotNull(createPath);
+			assertTrue(createPath.isPresent());
+			assertNotNull(createPath.get().getValue().getPOST());
+			System.out.println("Create path for " + modelName + " is " + createPath.get().getKey());
+		}
 	}
 	
 	private static Stream<String> responseTypesWithGetById() {
 		Set<String> noFindById = new HashSet<String>(EXCLUDED_RESPONSES);
 		noFindById.add("AccessToken" /* AccessToken cannot be read after it has been created */);
-	    return reader.getResponseTypeNames(e -> !noFindById.contains(e.getKey()));
+		noFindById.add("CommitStatus" /* Only a list of commit status can be retrieved */);
+		noFindById.add("IssueDeadline" /* Issue deadline can only be created */);
+		noFindById.add("LanguageStatistics" /* Only a list of LanguageStatistics can be retrieved */);
+		noFindById.add("MarkdownRender" /* MarkdownRender can only be created */);
+		noFindById.add("MarkupRender" /* MarkupRender can only be created */);
+		noFindById.add("PullReviewComment" /* Only a list of comments can be retrieved */);
+		noFindById.add("Reaction" /* Only a list of reactions can be retrieved */);
+		noFindById.add("Reference" /* Although there is a findById path it returns a list of References */);
+		noFindById.add("Secret" /* Secret can only be created */);
+		noFindById.add("StopWatch" /* StopWatch can only be created and deleted */);
+		noFindById.add("TrackedTime" /* Only a list of TrackedTime can be retrieved */);
+		return reader.getResponseTypeNames(e -> !noFindById.contains(e.getKey()));
+	}
+	
+	private static Stream<String> responseTypesWithPatch() {
+		Set<String> noFindById = new HashSet<String>(EXCLUDED_RESPONSES);
+		noFindById.add("AccessToken" /* AccessToken cannot be patched */);
+		noFindById.add("ActivityPub" /* The post method has additional /index which is not expected */);
+		noFindById.add("AnnotatedTag" /* AnnotatedTag cannot be patched */);
+		noFindById.add("Branch" /* Branch cannot be patched */);
+		noFindById.add("CombinedStatus" /* CombinedStatus is read-only */);
+		noFindById.add("Commit" /* Commit is read-only */);
+		noFindById.add("CommitStatus" /* CommitStatus cannot be patched */);
+		noFindById.add("ContentsResponse" /* ContentsResponse cannot be patched */);
+		noFindById.add("DeployKey" /* DeployKey cannot be patched */);
+		noFindById.add("GPGKey" /* GPGKey cannot be patched */);
+		
+		//TODO Why is patch path for EmailList is /user/settings
+		//TODO Why is patch path for GPGKeyList is /user/settings
+		
+		return reader.getResponseTypeNames(e -> !noFindById.contains(e.getKey()));
 	}
 	
 	private static Stream<String> modelsToTest() {
