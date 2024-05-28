@@ -18,19 +18,9 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-
-import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinition;
-import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinitionBuilder;
-import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinitionVersionBuilder;
-import io.fabric8.kubernetes.api.model.apiextensions.v1.JSONSchemaPropsBuilder;
-import io.fabric8.kubernetes.client.utils.Serialization;
 import io.quarkus.smallrye.openapi.runtime.OpenApiConstants;
 import io.smallrye.openapi.api.OpenApiConfig;
 import io.smallrye.openapi.api.OpenApiConfigImpl;
@@ -64,55 +54,6 @@ class ResponseTypeMapperTest {
 			throw new RuntimeException("Could not find [" + OpenApiConstants.BASE_NAME + Format.JSON + "]");
 		}
 	}
-	
-	@Test
-	public void test() {
-		System.out.println(model.getComponents().getResponses().get("Organization")); 
-		ObjectMapper objectMapper = new ObjectMapper();
-		JsonNode jsonNodeTree;
-		try {
-			jsonNodeTree = objectMapper.readTree(ResponseTypeMapperTest.class.getClassLoader().getResourceAsStream("gitea.json"));
-			String jsonAsYaml = new YAMLMapper().writeValueAsString(jsonNodeTree.get("components").get("schemas").get("Organization"));
-			//System.out.println(new KubernetesSerialization().unmarshal(schemas).getClass());
-			System.err.println(jsonAsYaml);
-			JsonNode schema = jsonNodeTree.get("components").get("schemas").get("Organization");
-			
-			
-			
-			JSONSchemaPropsBuilder specBuilder = new JSONSchemaPropsBuilder().withType("object");
-			schema.get("properties").fields().forEachRemaining(
-					f -> specBuilder.addToProperties(f.getKey(), new JSONSchemaPropsBuilder().withType(f.getValue().get("type").asText()).build())
-			);
-			
-			CustomResourceDefinitionBuilder defBuilder = new CustomResourceDefinitionBuilder();
-			CustomResourceDefinition customResourceDefinition = defBuilder.editOrNewMetadata()
-					.withName("Organization")
-				.endMetadata()
-				.editOrNewSpec()
-					.withGroup("opgen.io")
-					.withNewNames().withKind("Organization").endNames()
-					.withScope("Namespaced")
-					.withVersions(new CustomResourceDefinitionVersionBuilder()
-							.withName("v1alpha1")
-							.withServed(true)
-							.withStorage(true)
-							.withNewSchema()
-							.editOrNewOpenAPIV3Schema()
-							.addToProperties("status", new JSONSchemaPropsBuilder().withType("object").build())
-							.addToProperties("spec", specBuilder.build())
-							.endOpenAPIV3Schema()
-							.and()
-							.build())	
-				.endSpec()
-				.build();
-			
-			String myPodAsYaml = Serialization.asYaml(customResourceDefinition);
-		System.out.println(myPodAsYaml);		
-		} catch (IOException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-	}
 
 	@ParameterizedTest
 	@MethodSource("responseTypesWithGetById")
@@ -130,7 +71,7 @@ class ResponseTypeMapperTest {
 	}
 	
 	@ParameterizedTest
-	@MethodSource("modelsToTest")
+	@MethodSource("responseTypesWithDelete")
 	void deletePath(String modelName) {
 		ResponseTypeMapper analyzer = new ResponseTypeMapper(model, modelName);
 		if (!analyzer.isArrayType()) {
@@ -156,7 +97,7 @@ class ResponseTypeMapperTest {
 	}
 	
 	@ParameterizedTest
-	@MethodSource("modelsToTest")
+	@MethodSource("responseTypesWithCreate")
 	void createPath(String modelName) {
 		ResponseTypeMapper analyzer = new ResponseTypeMapper(model, modelName);
 		if (!analyzer.isArrayType()) {
@@ -186,27 +127,133 @@ class ResponseTypeMapperTest {
 	}
 	
 	private static Stream<String> responseTypesWithPatch() {
-		Set<String> noFindById = new HashSet<String>(EXCLUDED_RESPONSES);
-		noFindById.add("AccessToken" /* AccessToken cannot be patched */);
-		noFindById.add("ActivityPub" /* The post method has additional /index which is not expected */);
-		noFindById.add("AnnotatedTag" /* AnnotatedTag cannot be patched */);
-		noFindById.add("Branch" /* Branch cannot be patched */);
-		noFindById.add("CombinedStatus" /* CombinedStatus is read-only */);
-		noFindById.add("Commit" /* Commit is read-only */);
-		noFindById.add("CommitStatus" /* CommitStatus cannot be patched */);
-		noFindById.add("ContentsResponse" /* ContentsResponse cannot be patched */);
-		noFindById.add("DeployKey" /* DeployKey cannot be patched */);
-		noFindById.add("GPGKey" /* GPGKey cannot be patched */);
-		
-		//TODO Why is patch path for EmailList is /user/settings
-		//TODO Why is patch path for GPGKeyList is /user/settings
-		
-		return reader.getResponseTypeNames(e -> !noFindById.contains(e.getKey()));
+		Set<String> noPatch = new HashSet<String>(EXCLUDED_RESPONSES);
+		noPatch.add("AccessToken" /* AccessToken cannot be patched */);
+		noPatch.add("ActivityPub" /* ActivityPub cannot be patched */);
+		noPatch.add("AnnotatedTag" /* AnnotatedTag is read-onlyd */);
+		noPatch.add("Branch" /* Branch cannot be patched */);
+		noPatch.add("CombinedStatus" /* CombinedStatus is read-only */);
+		noPatch.add("Commit" /* Commit is read-only */);
+		noPatch.add("CommitStatus" /* CommitStatus cannot be patched */);
+		noPatch.add("ContentsResponse" /* ContentsResponse cannot be patched */);
+		noPatch.add("DeployKey" /* DeployKey cannot be patched */);
+		noPatch.add("GPGKey" /* GPGKey cannot be patched */);
+		noPatch.add("GeneralAPISettings" /* GeneralAPISettings is read-only */);
+		noPatch.add("GeneralAttachmentSettings" /* GeneralAttachmentSettings is read-only */);
+		noPatch.add("GeneralRepoSettings" /* GeneralRepoSettings is read-only */);
+		noPatch.add("GeneralUISettings" /* GeneralUISettings is read-only */);
+		noPatch.add("GitBlobResponse" /* GitBlobResponse is read-only*/);
+		noPatch.add("GitTreeResponse" /* GitTreeResponse is read-only */);
+		noPatch.add("GitignoreTemplateInfo" /* GitignoreTemplateInfo is read-only */);
+		noPatch.add("IssueDeadline" /* Issue deadline can only be created */);
+		noPatch.add("LanguageStatistics" /* LanguageStatistics is read-only */);
+		noPatch.add("LicenseTemplateInfo" /* LicenseTemplateInfo can only be get by id */);
+		noPatch.add("MarkdownRender" /* MarkdownRender can only be created */);
+		noPatch.add("MarkupRender" /* MarkupRender can only be created */);
+		noPatch.add("NodeInfo" /* NodeInfo is read-only */);
+		noPatch.add("Note" /* Note is read-only */);
+		noPatch.add("NotificationCount" /* Note is read-only */);
+		noPatch.add("OrganizationPermissions" /* OrganizationPermissions is read-only */);
+		noPatch.add("Package" /* Package cannot be patched */);
+		noPatch.add("PublicKey" /* PublicKey cannot be patched */);
+		noPatch.add("PullReview" /* PullReview cannot be patched */);
+		noPatch.add("PullReviewComment" /* PullReviewComment is read-only */);
+		noPatch.add("PushMirror" /* PushMirror cannot be patched */);
+		noPatch.add("Reaction" /* Reaction cannot be patched */);
+		noPatch.add("Reference" /* Reaction cannot be patched */);
+		noPatch.add("RepoCollaboratorPermission" /* RepoCollaboratorPermission is read-only */);
+		noPatch.add("RepoIssueConfig" /* RepoIssueConfig is read-only */);
+		noPatch.add("RepoIssueConfigValidation" /* RepoIssueConfigValidation is read-only */);
+		noPatch.add("RepoNewIssuePinsAllowed" /* RepoNewIssuePinsAllowed is read-only */);
+		noPatch.add("SearchResults" /* SearchResults is read-only */);
+		noPatch.add("Secret" /* Secret can only be created */);
+		noPatch.add("ServerVersion" /* ServerVersion is read-only */);
+		noPatch.add("StopWatch" /* StopWatch is read-only */);
+		noPatch.add("Tag" /* Tag cannot be patched */);
+		noPatch.add("TopicNames" /* TODO TopicNames cannot be patched but updated!! */);
+		noPatch.add("TrackedTime" /* TrackedTime is read-only */);
+		noPatch.add("WatchInfo" /* WatchInfo is read-only */);
+		noPatch.add("WikiCommitList" /* WikiCommitList is read-only */);
+		return reader.getResponseTypeNames(e -> !noPatch.contains(e.getKey()));
 	}
 	
-	private static Stream<String> modelsToTest() {
-	    return reader.getResponseTypeNames(e -> !EXCLUDED_RESPONSES.contains(e.getKey()));
+	private static Stream<String> responseTypesWithCreate() {
+		Set<String> noCreate = new HashSet<String>(EXCLUDED_RESPONSES);
+		noCreate.add("ActivityPub" /* The post method has additional /inbox which is not expected */);
+		noCreate.add("AnnotatedTag" /* AnnotatedTag is read-only */);
+		noCreate.add("CombinedStatus" /* CombinedStatus is read-only */);
+		noCreate.add("Commit" /* Commit is read-only */);
+		noCreate.add("GeneralAPISettings" /* GeneralAPISettings is read-only */);
+		noCreate.add("GeneralAttachmentSettings" /* GeneralAttachmentSettings is read-only */);
+		noCreate.add("GeneralRepoSettings" /* GeneralRepoSettings is read-only */);
+		noCreate.add("GeneralUISettings" /* GeneralUISettings is read-only */);
+		noCreate.add("GitBlobResponse" /* GitBlobResponse is read-only*/);
+		noCreate.add("GitHook" /*TODO The get method is in /git and the post one level above */);
+		noCreate.add("GitTreeResponse" /* GitTreeResponse is read-only */);
+		noCreate.add("GitignoreTemplateInfo" /* GitignoreTemplateInfo is read-only */);
+		noCreate.add("LanguageStatistics" /* LanguageStatistics is read-only */);
+		noCreate.add("LicenseTemplateInfo" /* LicenseTemplateInfo can only be get by id */);
+		noCreate.add("MarkdownRender" /* TODO MarkdownRender schema is text/html, we don't support this currently*/);
+		noCreate.add("MarkupRender" /* MarkupRender schema is text/html, we don't support this currently */);
+		noCreate.add("NodeInfo" /* NodeInfo is read-only */);
+		noCreate.add("Note" /* Note is read-only */);
+		noCreate.add("NotificationCount" /* Note is read-only */);
+		noCreate.add("NotificationThread" /* NotificationThread cannot be created */);
+		noCreate.add("OrganizationPermissions" /* OrganizationPermissions is read-only */);
+		noCreate.add("Package" /* Package cannot be created */);
+		noCreate.add("PullReviewComment" /* PullReviewComment is read-only */);
+		noCreate.add("Reference" /* Reference cannot be created is only part of ReferenceList */);
+		noCreate.add("RepoCollaboratorPermission" /* RepoCollaboratorPermission is read-only */);
+		noCreate.add("RepoIssueConfig" /* RepoIssueConfig is read-only */);
+		noCreate.add("RepoIssueConfigValidation" /* RepoIssueConfigValidation is read-only */);
+		noCreate.add("RepoNewIssuePinsAllowed" /* RepoNewIssuePinsAllowed is read-only */);
+		noCreate.add("SearchResults" /* SearchResults is read-only */);
+		noCreate.add("Secret" /* Secret can only be created */);
+		noCreate.add("ServerVersion" /* ServerVersion is read-only */);
+		noCreate.add("StopWatch" /* StopWatch is read-only */);
+		noCreate.add("TopicNames" /* TopicNames cannot be created but updated */);
+		noCreate.add("WatchInfo" /* WatchInfo is read-only */);
+		noCreate.add("WikiCommitList" /* WikiCommitList is read-only */);
+		return reader.getResponseTypeNames(e -> !noCreate.contains(e.getKey()));
 	}
 	
+	private static Stream<String> responseTypesWithDelete() {
+		Set<String> noDelete = new HashSet<String>(EXCLUDED_RESPONSES);
+		noDelete.add("ActivityPub" /* ActivityPub cannot be deleted */);
+		noDelete.add("AnnotatedTag" /* AnnotatedTag is read-only */);
+		noDelete.add("CombinedStatus" /* CombinedStatus is read-only */);
+		noDelete.add("Commit" /* Commit is read-only */);
+		noDelete.add("CommitStatus" /* CommitStatus cannot be deleted */);
+		noDelete.add("GeneralAPISettings" /* GeneralAPISettings is read-only */);
+		noDelete.add("GeneralAttachmentSettings" /* GeneralAttachmentSettings is read-only */);
+		noDelete.add("GeneralRepoSettings" /* GeneralRepoSettings is read-only */);
+		noDelete.add("GeneralUISettings" /* GeneralUISettings is read-only */);
+		noDelete.add("GitBlobResponse" /* GitBlobResponse is read-only*/);
+		noDelete.add("GitTreeResponse" /* GitTreeResponse is read-only */);
+		noDelete.add("GitignoreTemplateInfo" /* GitignoreTemplateInfo is read-only */);
+		noDelete.add("IssueDeadline" /* Issue deadline can only be created */);
+		noDelete.add("LanguageStatistics" /* LanguageStatistics is read-only */);
+		noDelete.add("LicenseTemplateInfo" /* LicenseTemplateInfo can only be get by id */);
+		noDelete.add("MarkdownRender" /* TODO MarkdownRender schema is text/html, we don't support this currently*/);
+		noDelete.add("MarkupRender" /* MarkupRender schema is text/html, we don't support this currently */);
+		noDelete.add("NodeInfo" /* NodeInfo is read-only */);
+		noDelete.add("Note" /* Note is read-only */);
+		noDelete.add("NotificationCount" /* Note is read-only */);
+		noDelete.add("NotificationThread" /* NotificationThread cannot be created */);
+		noDelete.add("OrganizationPermissions" /* OrganizationPermissions is read-only */);
+		noDelete.add("PullReviewComment" /* PullReviewComment is read-only */);
+		noDelete.add("Reference" /* Reference cannot be deleted */);
+		noDelete.add("RepoCollaboratorPermission" /* RepoCollaboratorPermission is read-only */);
+		noDelete.add("RepoIssueConfig" /* RepoIssueConfig is read-only */);
+		noDelete.add("RepoIssueConfigValidation" /* RepoIssueConfigValidation is read-only */);
+		noDelete.add("RepoNewIssuePinsAllowed" /* RepoNewIssuePinsAllowed is read-only */);
+		noDelete.add("SearchResults" /* SearchResults is read-only */);
+		noDelete.add("Secret" /* Secret can only be created */);
+		noDelete.add("ServerVersion" /* ServerVersion is read-only */);
+		noDelete.add("StopWatch" /* StopWatch is read-only */);
+		noDelete.add("TopicNames" /*  TODOTopicNames have no findById but only list. Hence it cannot be found. */);
+		noDelete.add("WikiCommitList" /* WikiCommitList is read-only */);
+		return reader.getResponseTypeNames(e -> !noDelete.contains(e.getKey()));
+	}
 	
 }

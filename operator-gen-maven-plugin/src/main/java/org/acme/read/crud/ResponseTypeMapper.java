@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -19,6 +20,7 @@ public class ResponseTypeMapper implements CrudMapper {
 
 	private static final String DO_NOT_MATCH = "%%%%";
 	private static final String MEDIATYPE_JSON = "application/json";
+	private static final String MEDIATYPE_TEXT_HTML = "text/html";
 	private final Schema schema;
 	private final OpenAPI api;
 	private String modelName;
@@ -37,6 +39,10 @@ public class ResponseTypeMapper implements CrudMapper {
 	 */
 	public String getResponseMediaType() {
 		return MEDIATYPE_JSON;
+	}
+	
+	public String[] getResponseMediaTypes() {
+		return new String[] {MEDIATYPE_JSON, MEDIATYPE_TEXT_HTML};
 	}
 	
 	@Override
@@ -155,7 +161,8 @@ public class ResponseTypeMapper implements CrudMapper {
 							.findAny();
 				})
 				.or(() -> 
-					api.getPaths().getPathItems().entrySet().stream().filter(this::matchPostResponse).findAny()
+					
+					api.getPaths().getPathItems().entrySet().stream().filter(e -> matchPostResponse(e, i -> i.getValue().getPOST())).findAny()
 
 				);
 	}
@@ -195,12 +202,17 @@ public class ResponseTypeMapper implements CrudMapper {
 						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
 	}
 	
-	private boolean matchPostResponse(Entry<String, PathItem> e) {
-		return e.getValue().getPOST() != null && e.getValue().getPOST().getResponses().getAPIResponse("201") != null
-				&& e.getValue().getPOST().getResponses().getAPIResponse("201").getContent()
+	private boolean matchPostResponse(Entry<String, PathItem> e, Function<Entry<String, PathItem>, Operation> f) {
+		return matchPostResponse(e, f, "201") || matchPostResponse(e, f, "200");
+	}
+	
+	private boolean matchPostResponse(Entry<String, PathItem> e, Function<Entry<String, PathItem>, Operation> f, String response) {
+		Operation op = f.apply(e);
+		return  schema.getRef() != null
+				&& op != null && op.getResponses().getAPIResponse(response) != null
+				&& op.getResponses().getAPIResponse(response).getContent()
 						.getMediaType(getResponseMediaType()) != null
-				&& schema.getRef() != null
-				&& Objects.equals(schema.getRef(), e.getValue().getPOST().getResponses().getAPIResponse("201")
+				&& Objects.equals(schema.getRef(), op.getResponses().getAPIResponse(response)
 						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
 	}
 	
