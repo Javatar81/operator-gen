@@ -6,10 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +15,6 @@ import com.microsoft.kiota.ApiException;
 
 import io.apisdk.gitea.json.ApiClient;
 import io.fabric8.kubernetes.api.model.HasMetadata;
-import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.kiota.http.vertx.VertXRequestAdapter;
@@ -39,7 +36,7 @@ public abstract class DependentsIT<T, U extends HasMetadata> {
 	String giteaApiUri;
 	@ConfigProperty(name = "test.kubernetes.namespace")
 	String namespace;
-	
+
 	@BeforeEach
    	void setUp() {
     	WebClient webClient = WebClient.create(vertx);
@@ -50,14 +47,10 @@ public abstract class DependentsIT<T, U extends HasMetadata> {
 		apiClient = new ApiClient(requestAdapter);
    	}
 	
-	@AfterEach
-	void tearDown() {
-		schemasToTest().forEach(s -> {
-			while (!client.resources(s).inNamespace(namespace).list().getItems().isEmpty()) {
-	    		client.resources(s).inNamespace(namespace).delete();
-	    	}
-		});
-    	
+	void tearDown(Class<? extends HasMetadata> crType) {
+		while (!client.resources(crType).inNamespace(namespace).list().getItems().isEmpty()) {
+    		client.resources(crType).inNamespace(namespace).delete();
+    	}
 	}
 	
 	@Test
@@ -111,7 +104,4 @@ public abstract class DependentsIT<T, U extends HasMetadata> {
 
 	abstract U newCustomResource(String name);
 	
-	private static Stream<Class<? extends CustomResource<?, ?>>> schemasToTest() {
-		return Stream.of(User.class, Organization.class);	
-	}
 }

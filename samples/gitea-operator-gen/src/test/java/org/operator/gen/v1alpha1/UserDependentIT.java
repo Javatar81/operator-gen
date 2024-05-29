@@ -1,5 +1,6 @@
 package org.operator.gen.v1alpha1;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 
 import io.apisdk.gitea.json.models.User;
@@ -8,7 +9,12 @@ import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 public class UserDependentIT extends DependentsIT<User, org.operator.gen.v1alpha1.User>{
-
+	
+	@AfterEach
+   	void tearDown() {
+		super.tearDown(org.operator.gen.v1alpha1.User.class);
+	}
+	
 	@Override
 	protected void assertResourceEquals(User resource, org.operator.gen.v1alpha1.User cr) {
 		Assertions.assertEquals(cr.getSpec().getDescription(), resource.getDescription());

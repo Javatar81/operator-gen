@@ -1,5 +1,6 @@
 package org.operator.gen.v1alpha1;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 
 import io.apisdk.gitea.json.models.Organization;
@@ -9,6 +10,11 @@ import io.quarkus.test.junit.QuarkusTest;
 @QuarkusTest
 public class OrganizationDependentIT extends DependentsIT<Organization, org.operator.gen.v1alpha1.Organization>{
 
+	@AfterEach
+   	void tearDown() {
+		super.tearDown(org.operator.gen.v1alpha1.Organization.class);
+	}
+	
 	@Override
 	Organization apiGet(org.operator.gen.v1alpha1.Organization org) {
 		return apiClient.orgs().byOrg(org.getMetadata().getName()).get();
