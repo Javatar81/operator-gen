@@ -11,15 +11,26 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.acme.OperatorGenMojo;
+import org.acme.client.ParameterResolver;
 import org.acme.read.crud.CrudMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.expr.NameExpr;
 
 import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinition;
 import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinitionBuilder;
@@ -41,18 +52,23 @@ import io.fabric8.kubernetes.client.utils.Serialization;
  * patch request schema will be moved to the CRD status.
  */
 public class CrdResourceGen {
-
+	private static final Logger LOG = LoggerFactory.getLogger(CrdResourceGen.class);
+	private static final String NODE_TEMPLATE = "{\"type\": \"%s\"}";
 	private final Path path;
 	private final Path openApiJson;
 	private final Name name;
 	private final CrudMapper mapper;
+	private final ParameterResolver resolver;
+	private final ObjectMapper objMapper = new ObjectMapper();
+	
 
-	public CrdResourceGen(Path path, Path openApiJson, Name name, CrudMapper mapper) {
+	public CrdResourceGen(Path path, Path openApiJson, Name name, CrudMapper mapper, ParameterResolver resolver) {
 		super();
 		this.path = path;
 		this.openApiJson = openApiJson;
 		this.name = name;
 		this.mapper = mapper;
+		this.resolver = resolver;
 	}
 
 	public void create() {
@@ -90,10 +106,34 @@ public class CrdResourceGen {
 			JsonNode crtSchema = jsonNodeTree.at(removeLeadingHash(crtSch.getRef()));
 			JsonNode uptSchema = jsonNodeTree.at(removeLeadingHash(uptSch.getRef()));
 			Set<Entry<String, JsonNode>> unionOfFields = unionOfFields(crtSchema.get("properties"), uptSchema.get("properties"));
+			addMissingFieldsFromPathParamMappings(unionOfFields, "spec");
 			mapProperties(specBuilder, unionOfFields, jsonNodeTree);
 			Set<Entry<String, JsonNode>> fieldsOfNotIn = fieldsOfNotIn(jsonNodeTree.at(removeLeadingHash(mapper.getByIdSchema().getRef())).get("properties"), unionOfFields.stream().map(Entry::getKey).toList());
+			addMissingFieldsFromPathParamMappings(fieldsOfNotIn, "status");
 			mapProperties(statusBuilder, fieldsOfNotIn, jsonNodeTree);
+
 		}));
+	}
+	
+	private void addMissingFieldsFromPathParamMappings(Set<Entry<String, JsonNode>> fields, String prefix) {
+		resolver.getPathParamMappingKeys().stream()
+			.filter(s -> 
+				mapper.getByIdPath().filter(p -> s.equals(p.getKey())).isPresent()
+				|| mapper.createPath().filter(p -> s.equals(p.getKey())).isPresent()
+				|| mapper.patchPath().filter(p -> s.equals(p.getKey())).isPresent()
+				|| mapper.deletePath().filter(p -> s.equals(p.getKey())).isPresent()
+			)
+			.flatMap(s -> resolver.paramMappingValueList(resolver.getPathParamMappings().get(s)).stream())
+			.filter(v -> v.startsWith(prefix + "."))
+			.map(v -> v.substring(prefix.length() + 1))
+			.filter(v -> fields.stream().noneMatch(e -> e.getKey().equals(v)))
+			.forEach(v -> {
+				try {
+					fields.add(Map.entry(v, objMapper.readTree(String.format(NODE_TEMPLATE, "string"))));
+				} catch (JsonProcessingException e) {
+					LOG.error("Error adding JSON node", e);
+				} 
+			});
 	}
 	
 	private String removeLeadingHash(String input) {

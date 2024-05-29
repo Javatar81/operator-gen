@@ -112,7 +112,8 @@ public class OperatorGenMojo
 		String crdVersion = config.getCrdVersion();
 		String basePackage = config.getCrdPackage();
 		ResponseTypeMapper mapper = new ResponseTypeMapper(openApiDoc, responseType);
-		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper, new ParameterResolver(config));
+		ParameterResolver resolver = new ParameterResolver(config);
+		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper, resolver);
 		String className = responseType.substring(0, 1).toUpperCase() + responseType.substring(1);
 		Name crdName = new Name(new Name(basePackage), className);
 		try {
@@ -120,7 +121,7 @@ public class OperatorGenMojo
 			if (!Files.exists(crdResOutputDir)) {
 				Files.createDirectory(crdResOutputDir);
 			}
-			CrdResourceGen resourceGen = new CrdResourceGen(crdResOutputDir.resolve(responseType + ".yaml"), jsonsFile.toPath(), crdName, mapper);
+			CrdResourceGen resourceGen = new CrdResourceGen(crdResOutputDir.resolve(responseType + ".yaml"), jsonsFile.toPath(), crdName, mapper, resolver);
 			resourceGen.create();
 		} catch (IOException e) {
 			LOG.error(String.format("Error processing response type '%s'", responseType), e);

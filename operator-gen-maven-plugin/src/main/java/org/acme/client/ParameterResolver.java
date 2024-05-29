@@ -1,6 +1,11 @@
 package org.acme.client;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import org.acme.Configuration;
 
@@ -18,17 +23,34 @@ public class ParameterResolver {
 	}
 	
 	public NodeList<Expression> resolveArgs(String path, NameExpr primary, NodeList<Expression> defaultArgs) {
-		return config.getPathParamMappings().keySet().stream()
-			.filter(k -> path.equalsIgnoreCase(k))
-			.map(k -> config.getPathParamMappings().get(k))
+		return getRawParamMappingValues(path::equalsIgnoreCase)
 			.findFirst()
-			.map(k -> Arrays.asList(k.split("\\|")).stream().map(v -> getterChain(primary, v)).toList())
+			.map(k -> paramMappingValueList(k).stream().map(v -> getterChain(primary, v)).toList())
 			.map(s -> {
 				NodeList<Expression> nodeList = new NodeList<>(s); 
 				nodeList.addAll(defaultArgs);
 				return nodeList;
 			})
 			.orElse(defaultArgs);
+	}
+	
+	public Set<String> getPathParamMappingKeys() {
+		return config.getPathParamMappings().keySet();
+	}
+	
+	public Map<String, String> getPathParamMappings() {
+		return config.getPathParamMappings();
+	}
+
+	
+	public Stream<String> getRawParamMappingValues(Predicate<String> filter) {
+		return config.getPathParamMappings().keySet().stream()
+			.filter(filter)
+			.map(k -> config.getPathParamMappings().get(k));
+	}
+	
+	public List<String> paramMappingValueList(String value) {
+		return Arrays.asList(value.split("\\|"));
 	}
 	
 	private Expression getterChain(NameExpr primary, String attrPath) {

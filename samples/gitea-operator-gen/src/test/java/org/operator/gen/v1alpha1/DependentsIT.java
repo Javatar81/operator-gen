@@ -1,0 +1,117 @@
+package org.operator.gen.v1alpha1;
+
+import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import com.microsoft.kiota.ApiException;
+
+import io.apisdk.gitea.json.ApiClient;
+import io.fabric8.kubernetes.api.model.HasMetadata;
+import io.fabric8.kubernetes.client.CustomResource;
+import io.fabric8.kubernetes.client.KubernetesClientBuilder;
+import io.fabric8.openshift.client.OpenShiftClient;
+import io.kiota.http.vertx.VertXRequestAdapter;
+import io.vertx.core.Vertx;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.ext.web.client.WebClientSession;
+import jakarta.inject.Inject;
+
+public abstract class DependentsIT<T, U extends HasMetadata> {
+
+	static OpenShiftClient client = new KubernetesClientBuilder().build().adapt(OpenShiftClient.class);
+	
+	ApiClient apiClient;
+	@Inject
+	Vertx vertx;
+	@Inject
+	HeaderAuthentication auth;
+	@ConfigProperty(name = "gitea.api.uri")
+	String giteaApiUri;
+	@ConfigProperty(name = "test.kubernetes.namespace")
+	String namespace;
+	
+	@BeforeEach
+   	void setUp() {
+    	WebClient webClient = WebClient.create(vertx);
+		WebClientSession webClientSession = WebClientSession.create(webClient);
+		auth.addAuthHeaders(webClientSession);
+		VertXRequestAdapter requestAdapter = new VertXRequestAdapter(webClientSession);
+		requestAdapter.setBaseUrl(giteaApiUri);
+		apiClient = new ApiClient(requestAdapter);
+   	}
+	
+	@AfterEach
+	void tearDown() {
+		schemasToTest().forEach(s -> {
+			while (!client.resources(s).inNamespace(namespace).list().getItems().isEmpty()) {
+	    		client.resources(s).inNamespace(namespace).delete();
+	    	}
+		});
+    	
+	}
+	
+	@Test
+    void create() {
+		U cr = newCustomResource("create");
+		client.resource(cr).create();
+		await().ignoreException(ApiException.class).atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			T resource = apiGet(cr);
+			assertNotNull(resource);
+			assertResourceEquals(resource, cr);
+        });
+    }
+	
+	@Test
+    void update() {
+		U cr = newCustomResource("update");
+		client.resource(cr).create();
+		client.resource(cr).edit(o -> {
+	        edit(cr);
+	        return cr;
+		});
+		await().ignoreException(ApiException.class).atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			T resource = apiGet(cr);
+			assertNotNull(resource);
+			assertResourceEquals(resource, cr);
+        });
+    }
+	
+	@Test
+    void delete() {
+		U cr = newCustomResource("delete");
+		client.resource(cr).create();
+		client.resource(cr).waitUntilReady(10, TimeUnit.SECONDS);
+		client.resource(cr).delete();
+		await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+			try {
+				apiGet(cr);
+				fail("Api Exception expected");
+			} catch (ApiException e) {
+				assertEquals(404, e.getResponseStatusCode());
+			}
+			
+        });
+    }
+	
+	protected abstract void assertResourceEquals(T resource, U cr);
+
+	abstract T apiGet(U cr);
+	
+	abstract void edit(U cr);
+
+	abstract U newCustomResource(String name);
+	
+	private static Stream<Class<? extends CustomResource<?, ?>>> schemasToTest() {
+		return Stream.of(User.class, Organization.class);	
+	}
+}
