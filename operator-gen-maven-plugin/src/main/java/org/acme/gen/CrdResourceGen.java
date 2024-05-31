@@ -16,21 +16,15 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.acme.OperatorGenMojo;
 import org.acme.client.ParameterResolver;
 import org.acme.read.crud.CrudMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
-import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Name;
-import com.github.javaparser.ast.expr.NameExpr;
 
 import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinition;
 import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinitionBuilder;
@@ -117,23 +111,32 @@ public class CrdResourceGen {
 	
 	private void addMissingFieldsFromPathParamMappings(Set<Entry<String, JsonNode>> fields, String prefix) {
 		resolver.getPathParamMappingKeys().stream()
-			.filter(s -> 
-				mapper.getByIdPath().filter(p -> s.equals(p.getKey())).isPresent()
-				|| mapper.createPath().filter(p -> s.equals(p.getKey())).isPresent()
-				|| mapper.patchPath().filter(p -> s.equals(p.getKey())).isPresent()
-				|| mapper.deletePath().filter(p -> s.equals(p.getKey())).isPresent()
-			)
+			.filter(this::oneOfCrudPathsMatches)
+			//TODO Determine the type of the param
+			// Use the path to determine the params and add info to param 1,2,3
 			.flatMap(s -> resolver.paramMappingValueList(resolver.getPathParamMappings().get(s)).stream())
 			.filter(v -> v.startsWith(prefix + "."))
-			.map(v -> v.substring(prefix.length() + 1))
+			.map(v -> removePrefix(prefix, v))
 			.filter(v -> fields.stream().noneMatch(e -> e.getKey().equals(v)))
 			.forEach(v -> {
 				try {
+					
 					fields.add(Map.entry(v, objMapper.readTree(String.format(NODE_TEMPLATE, "string"))));
 				} catch (JsonProcessingException e) {
 					LOG.error("Error adding JSON node", e);
 				} 
 			});
+	}
+
+	private String removePrefix(String prefix, String v) {
+		return v.substring(prefix.length() + 1);
+	}
+
+	private boolean oneOfCrudPathsMatches(String s) {
+		return mapper.getByIdPath().filter(p -> s.equals(p.getKey())).isPresent()
+		|| mapper.createPath().filter(p -> s.equals(p.getKey())).isPresent()
+		|| mapper.patchPath().filter(p -> s.equals(p.getKey())).isPresent()
+		|| mapper.deletePath().filter(p -> s.equals(p.getKey())).isPresent();
 	}
 	
 	private String removeLeadingHash(String input) {

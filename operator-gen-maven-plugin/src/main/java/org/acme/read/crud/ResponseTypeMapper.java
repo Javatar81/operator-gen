@@ -61,6 +61,10 @@ public class ResponseTypeMapper implements CrudMapper {
 				.getMediaType(getResponseMediaType()).getSchema());
 	}
 
+	/**
+	 * Searches for a GET operation that returns the schema as response. 
+	 * Prefers prefer the path that contains the schema name.
+	 */
 	@Override
 	public Optional<Entry<String, PathItem>> getByIdPath() {
 		return byIdPath(this::matchGetResponse);
@@ -151,27 +155,39 @@ public class ResponseTypeMapper implements CrudMapper {
 
 	@Override
 	public Optional<Entry<String, PathItem>> createPath() {
+		return parentIdPathWithPostOp()
+				.or(this::parentPatchPathWithPostOp)
+				.or(this::anyMatchingPostResponse);
+	}
+
+	private Optional<Entry<String, PathItem>> anyMatchingPostResponse() {
+		return api.getPaths().getPathItems().entrySet().stream().filter(this::matchPostResponse).findAny();
+	}
+
+	private Optional<? extends Entry<String, PathItem>> parentPatchPathWithPostOp() {
+		List<String> parentOfPatchPaths = parentPaths(byIdPaths(this::matchPatchResponse));
+		return api.getPaths().getPathItems().entrySet().stream()
+				.filter(e -> parentOfPatchPaths.contains(e.getKey())).filter(e -> e.getValue().getPOST() != null)
+				.findAny();
+	}
+
+	private Optional<Entry<String, PathItem>> parentIdPathWithPostOp() {
 		List<String> parentOfIdPaths = parentPaths(byIdPaths(this::matchGetResponse));
 		return api.getPaths().getPathItems().entrySet().stream().filter(e -> parentOfIdPaths.contains(e.getKey()))
-				.filter(e -> e.getValue().getPOST() != null).findFirst()
-				.or(() -> {
-					List<String> parentOfPatchPaths = parentPaths(byIdPaths(this::matchPatchResponse));
-					return api.getPaths().getPathItems().entrySet().stream()
-							.filter(e -> parentOfPatchPaths.contains(e.getKey())).filter(e -> e.getValue().getPOST() != null)
-							.findAny();
-				})
-				.or(() -> 
-					
-					api.getPaths().getPathItems().entrySet().stream().filter(e -> matchPostResponse(e, i -> i.getValue().getPOST())).findAny()
-
-				);
+				.filter(e -> e.getValue().getPOST() != null)
+				.findFirst();
 	}
 
 	@Override
 	public Optional<Entry<String, PathItem>> patchPath() {
-		Optional<Entry<String, PathItem>> patchPath = api.getPaths().getPathItems().entrySet().stream().filter(this::matchGetResponse)
+		Optional<Entry<String, PathItem>> patchPath = idPathWithPatchOp();
+		return patchPath.or(() -> deletePath().filter(p -> p.getValue().getPATCH() != null))
+				.or(() -> api.getPaths().getPathItems().entrySet().stream().filter(this::matchPatchResponse).findAny());		
+	}
+
+	private Optional<Entry<String, PathItem>> idPathWithPatchOp() {
+		return api.getPaths().getPathItems().entrySet().stream().filter(this::matchGetResponse)
 			.filter(e -> e.getValue().getPATCH() != null).findFirst();
-		return patchPath.or(() -> deletePath().filter(p -> p.getValue().getPATCH() != null));		
 	}
 
 	private List<String> parentPaths(Collection<Entry<String, PathItem>> paths) {
@@ -185,28 +201,21 @@ public class ResponseTypeMapper implements CrudMapper {
 	}
 
 	private boolean matchGetResponse(Entry<String, PathItem> e) {
-		return e.getValue().getGET() != null && e.getValue().getGET().getResponses().getAPIResponse("200") != null
-				&& e.getValue().getGET().getResponses().getAPIResponse("200").getContent()
-						.getMediaType(getResponseMediaType()) != null
-				&& schema.getRef() != null
-				&& Objects.equals(schema.getRef(), e.getValue().getGET().getResponses().getAPIResponse("200")
-						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
+		Function<Entry<String, PathItem>, Operation> getGET = i -> i.getValue().getGET();
+		return matchResponse(e, getGET, "200");
 	}
 
 	private boolean matchPatchResponse(Entry<String, PathItem> e) {
-		return e.getValue().getPATCH() != null && e.getValue().getPATCH().getResponses().getAPIResponse("200") != null
-				&& e.getValue().getPATCH().getResponses().getAPIResponse("200").getContent()
-						.getMediaType(getResponseMediaType()) != null
-				&& schema.getRef() != null
-				&& Objects.equals(schema.getRef(), e.getValue().getPATCH().getResponses().getAPIResponse("200")
-						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
+		Function<Entry<String, PathItem>, Operation> getPOST = i -> i.getValue().getPATCH();
+		return matchResponse(e, getPOST, "200");
 	}
 	
-	private boolean matchPostResponse(Entry<String, PathItem> e, Function<Entry<String, PathItem>, Operation> f) {
-		return matchPostResponse(e, f, "201") || matchPostResponse(e, f, "200");
+	private boolean matchPostResponse(Entry<String, PathItem> e) {
+		Function<Entry<String, PathItem>, Operation> getPOST = i -> i.getValue().getPOST();
+		return matchResponse(e, getPOST, "201") || matchResponse(e, getPOST, "200");
 	}
 	
-	private boolean matchPostResponse(Entry<String, PathItem> e, Function<Entry<String, PathItem>, Operation> f, String response) {
+	private boolean matchResponse(Entry<String, PathItem> e, Function<Entry<String, PathItem>, Operation> f, String response) {
 		Operation op = f.apply(e);
 		return  schema.getRef() != null
 				&& op != null && op.getResponses().getAPIResponse(response) != null
