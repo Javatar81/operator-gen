@@ -74,10 +74,6 @@ public class OperatorGenMojo
     private Configuration config;
     
     
-    public OperatorGenMojo() {
-    	
-    }
-    
     public void execute()
         throws MojoExecutionException
     {
@@ -112,7 +108,7 @@ public class OperatorGenMojo
 		String crdVersion = config.getCrdVersion();
 		String basePackage = config.getCrdPackage();
 		ResponseTypeMapper mapper = new ResponseTypeMapper(openApiDoc, responseType);
-		ParameterResolver resolver = new ParameterResolver(config);
+		ParameterResolver resolver = new ParameterResolver(config, openApiDoc);
 		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper, resolver);
 		String className = responseType.substring(0, 1).toUpperCase() + responseType.substring(1);
 		Name crdName = new Name(new Name(basePackage), className);

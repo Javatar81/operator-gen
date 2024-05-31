@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -46,6 +47,17 @@ import io.fabric8.kubernetes.client.utils.Serialization;
  * patch request schema will be moved to the CRD status.
  */
 public class CrdResourceGen {
+	
+	private static class FieldNameType {
+		String name;
+		String type;
+		FieldNameType(String name, String type) {
+			this.name = name;
+			this.type = type;
+		}
+	}
+	
+	
 	private static final Logger LOG = LoggerFactory.getLogger(CrdResourceGen.class);
 	private static final String NODE_TEMPLATE = "{\"type\": \"%s\"}";
 	private final Path path;
@@ -54,6 +66,8 @@ public class CrdResourceGen {
 	private final CrudMapper mapper;
 	private final ParameterResolver resolver;
 	private final ObjectMapper objMapper = new ObjectMapper();
+	
+	
 	
 
 	public CrdResourceGen(Path path, Path openApiJson, Name name, CrudMapper mapper, ParameterResolver resolver) {
@@ -112,24 +126,31 @@ public class CrdResourceGen {
 	private void addMissingFieldsFromPathParamMappings(Set<Entry<String, JsonNode>> fields, String prefix) {
 		resolver.getPathParamMappingKeys().stream()
 			.filter(this::oneOfCrudPathsMatches)
-			//TODO Determine the type of the param
-			// Use the path to determine the params and add info to param 1,2,3
-			.flatMap(s -> resolver.paramMappingValueList(resolver.getPathParamMappings().get(s)).stream())
-			.filter(v -> v.startsWith(prefix + "."))
+			.flatMap(s -> {
+				List<String> paramMappingValueList = resolver.paramMappingValueList(resolver.getPathParamMappings().get(s));
+				List<FieldNameType> fieldEntries = new ArrayList<>(); 
+				for (int i = 0; i < paramMappingValueList.size(); i++) {
+					fieldEntries.add(new FieldNameType(paramMappingValueList.get(i), resolver.getParameterType(s, i)
+							.map(p -> p.getSchema().getType().toString()).orElse("string")));
+				}
+				return fieldEntries.stream();
+			})
+			.filter(v -> v.name.startsWith(prefix + "."))
 			.map(v -> removePrefix(prefix, v))
-			.filter(v -> fields.stream().noneMatch(e -> e.getKey().equals(v)))
+			.filter(v -> fields.stream().noneMatch(e -> e.getKey().equals(v.name)))
 			.forEach(v -> {
 				try {
-					
-					fields.add(Map.entry(v, objMapper.readTree(String.format(NODE_TEMPLATE, "string"))));
+					System.out.println(v.name);
+					fields.add(Map.entry(v.name, objMapper.readTree(String.format(NODE_TEMPLATE, v.type))));
 				} catch (JsonProcessingException e) {
 					LOG.error("Error adding JSON node", e);
 				} 
-			});
+			});		
 	}
 
-	private String removePrefix(String prefix, String v) {
-		return v.substring(prefix.length() + 1);
+	private FieldNameType removePrefix(String prefix, FieldNameType fieldNameType) {
+		fieldNameType.name = fieldNameType.name.substring(prefix.length() + 1);
+		return fieldNameType;
 	}
 
 	private boolean oneOfCrudPathsMatches(String s) {
