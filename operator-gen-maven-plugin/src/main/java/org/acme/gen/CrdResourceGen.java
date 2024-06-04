@@ -140,7 +140,6 @@ public class CrdResourceGen {
 			.filter(v -> fields.stream().noneMatch(e -> e.getKey().equals(v.name)))
 			.forEach(v -> {
 				try {
-					System.out.println(v.name);
 					fields.add(Map.entry(v.name, objMapper.readTree(String.format(NODE_TEMPLATE, v.type))));
 				} catch (JsonProcessingException e) {
 					LOG.error("Error adding JSON node", e);

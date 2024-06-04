@@ -76,6 +76,7 @@ public class DependentGen {
 	private final ClassOrInterfaceType contextType;
 	private final ClassOrInterfaceType crdType;
 	private final ClassOrInterfaceType resourceType;
+	private final ClassOrInterfaceType collectionsType;
 	
 	public DependentGen(Path path, Name name, Name resource, ApiClientMethodCallFactory methodCalls, CrudMapper mapper) {
 		this.path = path;
@@ -88,6 +89,7 @@ public class DependentGen {
 				new SimpleName(Context.class.getSimpleName()),
 				new NodeList<>(crdType));
 		resourceType = new ClassOrInterfaceType(null, name.getIdentifier());
+		collectionsType = new ClassOrInterfaceType(null, Collections.class.getSimpleName());
 	}
 
 	public void create() {
@@ -287,17 +289,58 @@ public class DependentGen {
 	}
 
 	private void setFetchResourcesBody(ClassOrInterfaceType setType, MethodDeclaration fetchResourcesMethod) {
+
 		methodCalls.findById(new NameExpr(FIELD_API_CLIENT), new NameExpr("primaryResource"),
 				new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primaryResource"), "getMetadata"),
 						"getName")))
-				.ifPresent(m -> fetchResourcesMethod
-						.setBody(new BlockStmt(new NodeList<>(new TryStmt(new BlockStmt(new NodeList<>(new ReturnStmt(new MethodCallExpr(new TypeExpr(setType),
-								"of", new NodeList<>(new MethodCallExpr(m, "get")))))), new NodeList<>(catch404()), null)))));
+				.ifPresent(m -> {
+					ReturnStmt returnEmptySet = new ReturnStmt(new MethodCallExpr(new TypeExpr(collectionsType),
+							"emptySet", new NodeList<>()));
+					boolean methodChainContainsGetSpec = methodChainContains(m, "getSpec");
+					boolean methodChainContainsGetStatus = methodChainContains(m, "getStatus");
+					//if ()
+					var nodesInTry = new NodeList<Statement>();
+					if (methodChainContainsGetSpec || methodChainContainsGetStatus) {
+						BinaryExpr ifCondition;
+						BinaryExpr specNullCheck = new BinaryExpr(new MethodCallExpr(new NameExpr("primaryResource"),"getSpec"), new NullLiteralExpr(), com.github.javaparser.ast.expr.BinaryExpr.Operator.EQUALS);
+						BinaryExpr statusNullCheck = new BinaryExpr(new MethodCallExpr(new NameExpr("primaryResource"),"getStatus"), new NullLiteralExpr(), com.github.javaparser.ast.expr.BinaryExpr.Operator.EQUALS);
+						if (methodChainContainsGetSpec && methodChainContainsGetStatus) {
+							ifCondition = new BinaryExpr(specNullCheck, statusNullCheck, com.github.javaparser.ast.expr.BinaryExpr.Operator.OR);
+						} else if (methodChainContainsGetSpec) {
+							ifCondition = specNullCheck;
+						} else if (methodChainContainsGetStatus) {
+							ifCondition = statusNullCheck;
+						} else {
+							ifCondition = null;
+						}
+						nodesInTry.add(new IfStmt(ifCondition, returnEmptySet, null));
+					}
+					nodesInTry.add(new ReturnStmt(new MethodCallExpr(new TypeExpr(setType),
+							"of", new NodeList<>(new MethodCallExpr(m, "get")))));
+					fetchResourcesMethod
+							.setBody(new BlockStmt(new NodeList<>(new TryStmt(new BlockStmt(nodesInTry), new NodeList<>(catch404()), null))));
+				});
+	}
+	
+	private boolean methodChainContains(MethodCallExpr methodCallExpr, String methodName) {
+		if (methodCallExpr.getNameAsString().contains(methodName)) {
+			return true;
+		} else {
+			if (methodCallExpr.getArguments().stream().filter(a -> a.isMethodCallExpr()).map(a -> a.asMethodCallExpr())
+					.anyMatch(a -> a.getName().toString().contains(methodName) || methodChainContains(a, methodName))
+			) {
+				return true;
+			} else {
+				return methodCallExpr.getScope().filter(a -> a instanceof MethodCallExpr).map(a -> (MethodCallExpr) a)
+						.map(m -> methodChainContains(m, methodName)).orElse(false);
+			}
+		}
+
 	}
 	
 	private CatchClause catch404() {
 		ClassOrInterfaceType apiExceptionType = new ClassOrInterfaceType(null, ApiException.class.getSimpleName());
-		ClassOrInterfaceType collectionsType = new ClassOrInterfaceType(null, Collections.class.getSimpleName());
+		
 		return new CatchClause(new Parameter(apiExceptionType, "e"), new BlockStmt(new NodeList<>(new IfStmt(new BinaryExpr(new MethodCallExpr(new NameExpr("e"), "getResponseStatusCode"), new IntegerLiteralExpr("404"), com.github.javaparser.ast.expr.BinaryExpr.Operator.EQUALS), new ReturnStmt(new MethodCallExpr(new TypeExpr(collectionsType), "emptySet")), new ThrowStmt(new NameExpr("e"))))));
 	}
 }
