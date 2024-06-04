@@ -90,12 +90,13 @@
 	                <artifactId>operator-gen-maven-plugin</artifactId>
 	                <version>${project.version}</version>
                 	 <configuration>
-			          <schemas>Organization,User,Repository</schemas>
 			          <pathParamMappings>/orgs/{org}=spec.username,
 						  /repos/{owner}/{repo}=spec.ownerlogin,
 						  /admin/users/{username}/repos=spec.ownerlogin,
-						  /repos/{owner}/{repo}/issues/comments/{id}=status.user.login|spec.repo|status.id,
-						  /repos/{owner}/{repo}/issues/{index}/comments=status.user.login|spec.repo|status.id
+						  /repos/{owner}/{repo}/issues=spec.ownerlogin|spec.repo,
+						  /repos/{owner}/{repo}/issues/{index}=spec.ownerlogin|spec.repo|spec.issueindex,
+						  /repos/{owner}/{repo}/issues/comments/{id}=spec.ownerlogin|spec.repo|status.id,
+						  /repos/{owner}/{repo}/issues/{index}/comments=spec.ownerlogin|spec.repo|spec.issueindex
 					  </pathParamMappings>
 			          <!-- .. .-->
 			        </configuration>
@@ -130,7 +131,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <schemas>Organization,User,Repository</schemas>
+                    <schemas>Organization,User,Repository,Issue,Comment</schemas>
                     <!-- .. .-->
                 </configuration>
             </plugin>

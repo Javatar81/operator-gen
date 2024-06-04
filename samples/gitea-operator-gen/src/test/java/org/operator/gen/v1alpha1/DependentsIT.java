@@ -58,7 +58,7 @@ public abstract class DependentsIT<T, U extends HasMetadata> {
 		U cr = newCustomResource("create");
 		client.resource(cr).create();
 		await().ignoreException(ApiException.class).atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-			T resource = apiGet(cr);
+			T resource = apiGet(client.resource(cr).get());
 			assertNotNull(resource);
 			assertResourceEquals(resource, cr);
         });
@@ -90,6 +90,7 @@ public abstract class DependentsIT<T, U extends HasMetadata> {
 				apiGet(cr);
 				fail("Api Exception expected");
 			} catch (ApiException e) {
+				
 				assertEquals(404, e.getResponseStatusCode());
 			}
 			
