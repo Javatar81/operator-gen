@@ -16,10 +16,15 @@ public interface CrudMapper {
 
 	Optional<Entry<String, PathItem>> patchPath();
 
+	Optional<Entry<String, PathItem>> putPath();
+	
 	Schema getByIdSchema();
 
 	Optional<Schema> getCreateSchema();
 
-	Optional<Schema> getUpdateSchema();
+	Optional<Schema> getPatchSchema();
+
+	Optional<Schema> getPutSchema();
+
 
 }

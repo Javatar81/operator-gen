@@ -15,21 +15,31 @@ import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.parameters.RequestBody;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.quarkus.runtime.util.StringUtil;
 
 public class ResponseTypeMapper implements CrudMapper {
 
 	private static final String DO_NOT_MATCH = "%%%%";
 	private static final String MEDIATYPE_JSON = "application/json";
 	private static final String MEDIATYPE_TEXT_HTML = "text/html";
+	private static final String SCHEMA_PATH = "#/components/schemas/";
+	private static final Logger LOG = LoggerFactory.getLogger(ResponseTypeMapper.class);
+	
 	private final Schema schema;
+	private final String  schemaName;
 	private final OpenAPI api;
 	private String modelName;
 
 	public ResponseTypeMapper(OpenAPI api, String modelName) {
 		this.api = api;
 		this.modelName = modelName;
-		this.schema = getSchema(modelName)
-				.orElseThrow(() -> new IllegalArgumentException("No schema found named " + modelName));
+		Optional<Schema> schemaFromResponses = getSchemaFromResponses(modelName);
+		this.schemaName = schemaFromResponses.map(s -> resolveSchemaName(s)).orElse(modelName);
+		this.schema =  schemaFromResponses.or(() -> Optional.ofNullable(api.getComponents().getSchemas())
+				.map(r -> r.get(modelName))).orElseThrow(() -> new IllegalArgumentException("No schema found named " + modelName));
 	}
 
 	/**
@@ -50,15 +60,52 @@ public class ResponseTypeMapper implements CrudMapper {
 		return schema;
 	}
 	
+	public String getByIdSchemaName() {
+		return schemaName;
+	}
+	
 	public boolean isArrayType() {
+		return isArrayType(this.schema);
+	}
+	
+	private static boolean isArrayType(Schema schema) {
 		return Optional.ofNullable(schema.getType())
 			.filter(t -> "array".equalsIgnoreCase(t.name()))
 			.isPresent();
 	}
 
-	private Optional<Schema> getSchema(String modelName) {
-		return Optional.ofNullable(api.getComponents().getResponses().get(modelName).getContent()
-				.getMediaType(getResponseMediaType()).getSchema());
+	private Optional<Schema> getSchemaFromResponses(String modelName) {
+		return Optional.ofNullable(api.getComponents().getResponses())
+				.map(r -> r.get(modelName))
+				.map(r -> r.getContent()) 
+				.map(c -> c.getMediaType(getResponseMediaType()))
+				.map(m -> m.getSchema());
+	}
+	
+	public static String resolveSchemaName(Schema schema) {
+		if (isArrayType(schema)) {
+			if (schema.getItems().getRef() != null) {
+				return schema.getItems().getRef().substring(SCHEMA_PATH.length());
+			} else {
+				return schema.getItems().getType().name();
+			}
+		} else {
+			return schema.getRef().substring(SCHEMA_PATH.length());
+		}
+		
+	}
+	
+	private Optional<Schema> resolveRef(Schema proxy) {
+		if (StringUtil.isNullOrEmpty(proxy.getRef())){
+			return Optional.of(proxy);
+		} else {
+			
+			if (proxy.getRef().startsWith(SCHEMA_PATH)) {
+				return Optional.ofNullable(api.getComponents().getSchemas().get(proxy.getRef().substring(SCHEMA_PATH.length())));
+			} else {
+				return Optional.empty();
+			}
+		}
 	}
 
 	/**
@@ -82,7 +129,7 @@ public class ResponseTypeMapper implements CrudMapper {
 	}
 	
 	@Override
-	public Optional<Schema> getUpdateSchema() {
+	public Optional<Schema> getPatchSchema() {
 		return patchPath()
 				.map(Entry::getValue)
 				.map(PathItem::getPATCH)
@@ -91,8 +138,18 @@ public class ResponseTypeMapper implements CrudMapper {
 				.map(c -> c.getMediaType(MEDIATYPE_JSON))
 				.map(m -> m.getSchema());
 	}
-
 	
+	@Override
+	public Optional<Schema> getPutSchema() {
+		return putPath()
+				.map(Entry::getValue)
+				.map(PathItem::getPUT)
+				.map(Operation::getRequestBody)
+				.map(RequestBody::getContent)
+				.map(c -> c.getMediaType(MEDIATYPE_JSON))
+				.map(m -> m.getSchema());
+	}
+
 	private Optional<Entry<String, PathItem>> byIdPath(Predicate<Entry<String, PathItem>> filter) {
 		return byIdPaths(filter).stream().findAny();
 	}
@@ -100,6 +157,7 @@ public class ResponseTypeMapper implements CrudMapper {
 	private Collection<Entry<String, PathItem>> byIdPaths(Predicate<Entry<String, PathItem>> filter) {
 		List<Entry<String, PathItem>> potentialIdPaths = api.getPaths().getPathItems().entrySet().stream()
 				.filter(filter).toList();
+		LOG.debug("Found {} potential paths", potentialIdPaths.size());
 		if (potentialIdPaths.isEmpty()) {
 			return Collections.emptyList();
 		} else if (potentialIdPaths.size() == 1) {
@@ -180,9 +238,22 @@ public class ResponseTypeMapper implements CrudMapper {
 
 	@Override
 	public Optional<Entry<String, PathItem>> patchPath() {
+		LOG.debug("Trying to find patch path for {}", schemaName);
 		Optional<Entry<String, PathItem>> patchPath = idPathWithPatchOp();
-		return patchPath.or(() -> deletePath().filter(p -> p.getValue().getPATCH() != null))
-				.or(() -> api.getPaths().getPathItems().entrySet().stream().filter(this::matchPatchResponse).findAny());		
+		patchPath.ifPresent(p -> LOG.debug("Found patch path by id path {}", p.getKey()));
+		Optional<Entry<String, PathItem>> result = patchPath.or(() -> deletePath().filter(p -> p.getValue().getPATCH() != null))
+				.or(() -> api.getPaths().getPathItems().entrySet().stream().filter(this::matchPatchResponse).findAny());	
+		result.ifPresent(p -> LOG.debug("Found patch path by delete path {}", p.getKey()));
+		return result;
+	}
+	
+	@Override
+	public Optional<Entry<String, PathItem>> putPath() {
+		LOG.debug("Trying to find put path for {}", schemaName);
+		Optional<Entry<String, PathItem>> putPath = idPathWithPatchOp();
+		putPath.ifPresent(p -> LOG.debug("Found potential put path {}", p.getKey()));
+		return putPath.or(() -> deletePath().filter(p -> p.getValue().getPUT() != null))
+				.or(() -> api.getPaths().getPathItems().entrySet().stream().filter(this::matchPutResponse).findAny());		
 	}
 
 	private Optional<Entry<String, PathItem>> idPathWithPatchOp() {
@@ -210,6 +281,11 @@ public class ResponseTypeMapper implements CrudMapper {
 		return matchResponse(e, getPOST, "200");
 	}
 	
+	private boolean matchPutResponse(Entry<String, PathItem> e) {
+		Function<Entry<String, PathItem>, Operation> getPUT = i -> i.getValue().getPUT();
+		return matchResponse(e, getPUT, "200");
+	}
+	
 	private boolean matchPostResponse(Entry<String, PathItem> e) {
 		Function<Entry<String, PathItem>, Operation> getPOST = i -> i.getValue().getPOST();
 		return matchResponse(e, getPOST, "201") || matchResponse(e, getPOST, "200");
@@ -217,13 +293,20 @@ public class ResponseTypeMapper implements CrudMapper {
 	
 	private boolean matchResponse(Entry<String, PathItem> e, Function<Entry<String, PathItem>, Operation> f, String response) {
 		Operation op = f.apply(e);
-		return  schema.getRef() != null
-				&& op != null && op.getResponses().getAPIResponse(response) != null
+		return  op != null && op.getResponses().getAPIResponse(response) != null
+				&& op.getResponses().getAPIResponse(response).getContent() != null
 				&& op.getResponses().getAPIResponse(response).getContent()
 						.getMediaType(getResponseMediaType()) != null
-				&& Objects.equals(schema.getRef(), op.getResponses().getAPIResponse(response)
-						.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
+				&& responseTypeSchemaMatches(op, response);
 	}
 	
-
+	private boolean responseTypeSchemaMatches(Operation op, String response) {
+		if (LOG.isDebugEnabled()) {
+			LOG.debug("Matching {} with {}", SCHEMA_PATH + schemaName, op.getResponses().getAPIResponse(response)
+				.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
+		}
+		return Objects.equals(SCHEMA_PATH + schemaName, op.getResponses().getAPIResponse(response)
+				.getContent().getMediaType(getResponseMediaType()).getSchema().getRef());
+	}
+	
 }

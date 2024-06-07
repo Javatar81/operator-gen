@@ -38,8 +38,8 @@ class ResponseTypeReaderTest {
 	@ParameterizedTest
 	@MethodSource("expectedResponseTypes")
 	void read(String responseType) {
-		ResponseTypeReader analyzer = new ResponseTypeReader(model);
-		assertTrue(analyzer.getResponseTypeNames(e -> responseType.equals(e.getKey())).findFirst().isPresent());
+		ModelReader analyzer = new ModelReader(model);
+		assertTrue(analyzer.getResponseTypeOrSchemaNames(e -> responseType.equals(e.getKey())).findFirst().isPresent());
 		
 	}
 

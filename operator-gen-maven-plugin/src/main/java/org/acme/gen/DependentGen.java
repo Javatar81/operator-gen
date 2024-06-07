@@ -9,6 +9,7 @@ import java.util.Set;
 
 import org.acme.client.ApiClientMethodCallFactory;
 import org.acme.read.crud.CrudMapper;
+import org.eclipse.microprofile.openapi.models.Operation;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier.Keyword;
@@ -120,17 +121,12 @@ public class DependentGen {
 				new SimpleName(PerResourcePollingDependentResource.class.getSimpleName()),
 				new NodeList<>(resourceType, crdType));
 		
-		ClassOrInterfaceType updaterType = new ClassOrInterfaceType(null,
-				new SimpleName(Updater.class.getSimpleName()),
-				new NodeList<>(resourceType, crdType));
-		ClassOrInterfaceType deleterType = new ClassOrInterfaceType(null,
-				new SimpleName(Deleter.class.getSimpleName()),
-				new NodeList<>(crdType));
+		
+		
 		
 		ClassOrInterfaceDeclaration clazz = cu.addClass(className, Keyword.PUBLIC)
-				.addExtendedType(dependentType)
-				.addImplementedType(updaterType)
-				.addImplementedType(deleterType);
+				.addExtendedType(dependentType);
+				
 		
 		fields(clazz);
 		constructor(clazz);
@@ -146,11 +142,9 @@ public class DependentGen {
 				);
 		mapper.patchPath()
 				.map(e -> e.getValue().getPATCH())
-				.map(p -> p.getRequestBody().getContent().getMediaType("application/json"))
-				.map(m -> m.getSchema().getRef())
-				.map(r -> r.substring(r.lastIndexOf("/") + 1, r.length()))
-				.ifPresent(t -> 
-					updateMethod(cu, clazz, new ClassOrInterfaceType(null, t))
+				.or(() -> mapper.putPath().map(e -> e.getValue().getPUT()))
+				.ifPresent(op -> 
+					updateMethod(cu, clazz, op)
 				);
 		deleteMethod(cu, clazz);
 		fromResourceMethod(clazz);
@@ -174,6 +168,10 @@ public class DependentGen {
 
 	private void deleteMethod(CompilationUnit cu, ClassOrInterfaceDeclaration clazz) {
 		cu.addImport(Deleter.class);
+		ClassOrInterfaceType deleterType = new ClassOrInterfaceType(null,
+				new SimpleName(Deleter.class.getSimpleName()),
+				new NodeList<>(crdType));
+		clazz.addImplementedType(deleterType);
 		MethodDeclaration deleteMethod = clazz.addMethod("delete", Keyword.PUBLIC)
 				.addAnnotation(Override.class)
 				.addParameter(crdType, "primary")
@@ -247,9 +245,16 @@ public class DependentGen {
 		createMethod.setBody(new BlockStmt(new NodeList<>(new ExpressionStmt(assignCreateOpt), createReturn)));
 	}
 	
-	private void updateMethod(CompilationUnit cu, ClassOrInterfaceDeclaration clazz, Type updateOptionType) {
+	private void updateMethod(CompilationUnit cu, ClassOrInterfaceDeclaration clazz, Operation op) {
+		String ref = op.getRequestBody().getContent().getMediaType("application/json").getSchema().getRef();
+		String typeName = ref.substring(ref.lastIndexOf("/") + 1, ref.length());
+		ClassOrInterfaceType updateOptionType = new ClassOrInterfaceType(null, typeName);
 		cu.addImport(Updater.class);
 		cu.addImport(resource.getQualifier().map(Name::toString).orElse("") + "." + updateOptionType);
+		ClassOrInterfaceType updaterType = new ClassOrInterfaceType(null,
+				new SimpleName(Updater.class.getSimpleName()),
+				new NodeList<>(resourceType, crdType));
+		clazz.addImplementedType(updaterType);
 		MethodDeclaration updateMethod = clazz.addMethod("update", Keyword.PUBLIC)
 				.addAnnotation(Override.class)
 				.addParameter(resourceType, "actual")
@@ -262,9 +267,18 @@ public class DependentGen {
 						"getName")),
 				new NodeList<>(new NameExpr("editOption")));
 		AssignExpr assignUpdateOpt = new AssignExpr(new VariableDeclarationExpr(updateOptionType, "editOption"), new MethodCallExpr(null, "fromResource", new NodeList<>(new NameExpr("primary"), new MethodReferenceExpr(new TypeExpr(updateOptionType), new NodeList<>(),"createFromDiscriminatorValue"))),Operator.ASSIGN);
-		ReturnStmt updateReturn = updateCall
-				.map(m -> new ReturnStmt(m)).orElse(new ReturnStmt(new NullLiteralExpr()));
-		updateMethod.setBody(new BlockStmt(new NodeList<>(new ExpressionStmt(assignUpdateOpt), updateReturn)));
+		BlockStmt body = new BlockStmt(new NodeList<>(new ExpressionStmt(assignUpdateOpt)));
+		ReturnStmt updateReturn;
+		if (op.getResponses().getAPIResponse("200") != null && op.getResponses().getAPIResponse("200").getContent() != null) {
+			updateReturn = updateCall
+					.map(m -> new ReturnStmt(m)).orElse(new ReturnStmt(new NullLiteralExpr()));
+		} else {
+			updateCall
+				.ifPresent(m -> body.addStatement(m));
+			updateReturn = new ReturnStmt(new NameExpr("desired"));
+		}
+		body.addStatement(updateReturn);
+		updateMethod.setBody(body);
 	}
 	
 	private void fromResourceMethod(ClassOrInterfaceDeclaration clazz) {

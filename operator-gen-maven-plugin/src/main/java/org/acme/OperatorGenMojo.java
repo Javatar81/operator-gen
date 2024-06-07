@@ -16,7 +16,7 @@ import org.acme.client.ParameterResolver;
 import org.acme.gen.CrdResourceGen;
 import org.acme.gen.DependentGen;
 import org.acme.gen.ReconcilerGen;
-import org.acme.read.ResponseTypeReader;
+import org.acme.read.ModelReader;
 import org.acme.read.crud.ResponseTypeMapper;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -98,10 +98,9 @@ public class OperatorGenMojo
 
 	private void pocessOpenApiFile(File jsonsFile) {
 		OpenAPI openApiDoc = loadOpenApiDoc(jsonsFile, config.getConfig());
-		ResponseTypeReader reader = new ResponseTypeReader(openApiDoc);
-		reader.getResponseTypeNames(e -> schemas.contains(e.getKey())).forEach(r -> 
-			processResponseType(openApiDoc, jsonsFile, r)
-		);
+		ModelReader responseTypeReader = new ModelReader(openApiDoc);
+		responseTypeReader.getResponseTypeOrSchemaNames(e -> schemas.contains(e.getKey()))
+			.forEach(r -> processResponseType(openApiDoc, jsonsFile, r));
 	}
 
 	private void processResponseType(OpenAPI openApiDoc, File jsonsFile, String responseType) {

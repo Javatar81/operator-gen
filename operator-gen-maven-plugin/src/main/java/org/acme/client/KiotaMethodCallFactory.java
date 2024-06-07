@@ -12,7 +12,6 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 
 public class KiotaMethodCallFactory implements ApiClientMethodCallFactory {
-	
 	private final CrudMapper mapper;
 	private final ParameterResolver resolver;
 
@@ -40,9 +39,15 @@ public class KiotaMethodCallFactory implements ApiClientMethodCallFactory {
 	@Override
 	public Optional<MethodCallExpr> update(NameExpr apiClient, NameExpr primary, NodeList<Expression> byIdArgs, NodeList<Expression> patchArgs) {
 		Optional<Entry<String, PathItem>> patchPath = mapper.patchPath();
-		return patchPath
+		Optional<MethodCallExpr> patchPathResult = patchPath
 				.map(Entry::getKey)
 				.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, resolver.resolveArgs(k, primary, byIdArgs)), "patch", new NodeList<>(patchArgs)));
+		if (patchPathResult.isEmpty()) {
+			return mapper.putPath().map(Entry::getKey)
+					.map(k -> new MethodCallExpr(toMethodCallExpression(apiClient, k, resolver.resolveArgs(k, primary, byIdArgs)), "put", new NodeList<>(patchArgs)));
+		} else {
+			return patchPathResult;
+		}
 	}
 	
 	@Override

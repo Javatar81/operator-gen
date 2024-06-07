@@ -110,7 +110,7 @@ public class CrdResourceGen {
 	}
 
 	private void mapProperties(JsonNode jsonNodeTree, JSONSchemaPropsBuilder specBuilder, JSONSchemaPropsBuilder statusBuilder) {
-		mapper.getCreateSchema().ifPresent(crtSch -> mapper.getUpdateSchema().ifPresent(uptSch -> {
+		mapper.getCreateSchema().ifPresent(crtSch -> mapper.getPatchSchema().ifPresent(uptSch -> {
 			JsonNode crtSchema = jsonNodeTree.at(removeLeadingHash(crtSch.getRef()));
 			JsonNode uptSchema = jsonNodeTree.at(removeLeadingHash(uptSch.getRef()));
 			Set<Entry<String, JsonNode>> unionOfFields = unionOfFields(crtSchema.get("properties"), uptSchema.get("properties"));
