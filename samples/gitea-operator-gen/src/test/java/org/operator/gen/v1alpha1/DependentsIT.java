@@ -15,6 +15,7 @@ import com.microsoft.kiota.ApiException;
 
 import io.apisdk.gitea.json.ApiClient;
 import io.fabric8.kubernetes.api.model.HasMetadata;
+import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.kiota.http.vertx.VertXRequestAdapter;
@@ -23,7 +24,7 @@ import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.WebClientSession;
 import jakarta.inject.Inject;
 
-public abstract class DependentsIT<T, U extends HasMetadata> {
+public abstract class DependentsIT<T, U extends CustomResource<?, ?>> {
 
 	static OpenShiftClient client = new KubernetesClientBuilder().build().adapt(OpenShiftClient.class);
 	
@@ -74,7 +75,6 @@ public abstract class DependentsIT<T, U extends HasMetadata> {
 		});
 		await().ignoreException(ApiException.class).atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
 			T resource = apiGet(client.resource(cr).get());
-			System.out.println(resource);
 			assertNotNull(resource);
 			assertResourceEquals(resource, cr);
         });
@@ -84,10 +84,10 @@ public abstract class DependentsIT<T, U extends HasMetadata> {
     void delete() {
 		U cr = newCustomResource("delete");
 		client.resource(cr).create();
-		client.resource(cr).waitUntilReady(10, TimeUnit.SECONDS);
-		client.resource(cr).delete();
+		client.resource(cr).waitUntilCondition(r -> r.getStatus() != null, 10, TimeUnit.SECONDS);
+		U crUpdated = client.resource(cr).get();
+		client.resource(crUpdated).delete();
 		await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-			U crUpdated = client.resource(cr).get();
 			try {
 				apiGet(crUpdated);
 				fail("Api Exception expected");
