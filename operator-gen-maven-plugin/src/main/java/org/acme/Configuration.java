@@ -1,9 +1,11 @@
 package org.acme;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import org.eclipse.microprofile.config.Config;
 
@@ -11,9 +13,11 @@ public class Configuration {
 	
 	private final Config config;
 	private final Map<String, String> pathParamMappings = new HashMap<>();
+	private final Properties crdCustomizations;
 	
-	public Configuration(Config config, List<String> pathParamMappings) {
+	public Configuration(Config config, List<String> pathParamMappings, Properties crdCustomizations) {
 		this.config = config;
+		this.crdCustomizations = crdCustomizations;
 		pathParamMappings.stream()
 			.map(s -> s.split("="))
 			.filter(a -> a.length > 1)
@@ -38,6 +42,11 @@ public class Configuration {
 
 	public Config getConfig() {
 		return config;
+	}
+	
+	public List<String> getIgnoreProps() {
+		String ignoreProps = crdCustomizations.get("ignoreProps").toString();
+		return Arrays.asList(ignoreProps.split(","));
 	}
 
 }

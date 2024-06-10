@@ -18,6 +18,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.acme.Configuration;
 import org.acme.client.ParameterResolver;
 import org.acme.read.crud.CrudMapper;
 import org.slf4j.Logger;
@@ -71,17 +72,16 @@ public class CrdResourceGen {
 	private final CrudMapper mapper;
 	private final ParameterResolver resolver;
 	private final ObjectMapper objMapper = new ObjectMapper();
+	private final Configuration config;
 	
-	
-	
-
-	public CrdResourceGen(Path path, Path openApiJson, Name name, CrudMapper mapper, ParameterResolver resolver) {
+	public CrdResourceGen(Path path, Path openApiJson, Name name, CrudMapper mapper, ParameterResolver resolver, Configuration config) {
 		super();
 		this.path = path;
 		this.openApiJson = openApiJson;
 		this.name = name;
 		this.mapper = mapper;
 		this.resolver = resolver;
+		this.config = config;
 	}
 
 	public void create() {
@@ -123,6 +123,7 @@ public class CrdResourceGen {
 					.map(s -> jsonNodeTree.at(removeLeadingHash(s)))
 					.map(n -> n.get(ATTR_PROPS)).orElse(null);
 			Set<Entry<String, JsonNode>> unionOfFields = unionOfFields(crtSchemaProps, uptSchemaProps);
+			removeIgnoredFields(unionOfFields);
 			addMissingFieldsFromPathParamMappings(unionOfFields, "spec");
 			mapProperties(specBuilder, unionOfFields, jsonNodeTree);
 			return unionOfFields;
@@ -132,6 +133,7 @@ public class CrdResourceGen {
 				.map(s -> jsonNodeTree.at(removeLeadingHash(s)))
 				.map(n -> n.get(ATTR_PROPS)).orElse(null);
 		Set<Entry<String, JsonNode>> fieldsOfNotIn = fieldsOfNotIn(getSchemaProps, allSpecFields.stream().map(Entry::getKey).toList());
+		removeIgnoredFields(fieldsOfNotIn);
 		addMissingFieldsFromPathParamMappings(fieldsOfNotIn, "status");
 		mapProperties(statusBuilder, fieldsOfNotIn, jsonNodeTree);
 	}
@@ -252,6 +254,11 @@ public class CrdResourceGen {
 			b.fields().forEachRemaining(union::add);
 		}
 		return union;
+	}
+	
+	private Set<Entry<String, JsonNode>> removeIgnoredFields(Set<Entry<String, JsonNode>> props) {
+		props.removeIf(e -> config.getIgnoreProps().contains(e.getKey()));
+		return props;
 	}
 	
 	private Set<Entry<String, JsonNode>> fields(JsonNode a) {

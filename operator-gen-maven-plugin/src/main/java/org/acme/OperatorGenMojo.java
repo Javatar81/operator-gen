@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 
 import org.acme.client.ApiClientMethodCallFactory;
 import org.acme.client.KiotaMethodCallFactory;
@@ -59,6 +60,9 @@ public class OperatorGenMojo
 	@Parameter(property = "pathParamMappings", required = false)
 	private List<String> pathParamMappings = null;
 	
+	@Parameter(property = "crdCustomizations", required = false)
+	private Properties crdCustomizations = null;
+	
     /**
      * Location of the generated source code.
      */
@@ -78,7 +82,7 @@ public class OperatorGenMojo
     public void execute()
         throws MojoExecutionException
     {
-    	config = new Configuration(ConfigProvider.getConfig(), pathParamMappings);
+    	config = new Configuration(ConfigProvider.getConfig(), pathParamMappings, crdCustomizations);
         File f = sourceDestinationFolder;
         if ( !f.exists() )
         {
@@ -117,7 +121,7 @@ public class OperatorGenMojo
 			if (!Files.exists(crdResOutputDir)) {
 				Files.createDirectory(crdResOutputDir);
 			}
-			CrdResourceGen resourceGen = new CrdResourceGen(crdResOutputDir.resolve(responseType + ".yaml"), jsonsFile.toPath(), crdName, mapper, resolver);
+			CrdResourceGen resourceGen = new CrdResourceGen(crdResOutputDir.resolve(responseType + ".yaml"), jsonsFile.toPath(), crdName, mapper, resolver, config);
 			resourceGen.create();
 		} catch (IOException e) {
 			LOG.error(String.format("Error processing response type '%s'", responseType), e);
