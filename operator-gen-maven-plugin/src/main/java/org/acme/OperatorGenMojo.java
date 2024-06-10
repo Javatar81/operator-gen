@@ -17,6 +17,7 @@ import org.acme.gen.CrdResourceGen;
 import org.acme.gen.DependentGen;
 import org.acme.gen.ReconcilerGen;
 import org.acme.read.ModelReader;
+import org.acme.read.crud.CrudMapper;
 import org.acme.read.crud.ResponseTypeMapper;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -106,7 +107,7 @@ public class OperatorGenMojo
 	private void processResponseType(OpenAPI openApiDoc, File jsonsFile, String responseType) {
 		String crdVersion = config.getCrdVersion();
 		String basePackage = config.getCrdPackage();
-		ResponseTypeMapper mapper = new ResponseTypeMapper(openApiDoc, responseType);
+		CrudMapper mapper = new ResponseTypeMapper(openApiDoc, responseType);
 		ParameterResolver resolver = new ParameterResolver(config, openApiDoc);
 		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper, resolver);
 		String className = responseType.substring(0, 1).toUpperCase() + responseType.substring(1);

@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -48,6 +49,10 @@ import io.fabric8.kubernetes.client.utils.Serialization;
  */
 public class CrdResourceGen {
 	
+	private static final String ATTR_PROPS = "properties";
+
+
+
 	private static class FieldNameType {
 		String name;
 		String type;
@@ -110,18 +115,28 @@ public class CrdResourceGen {
 	}
 
 	private void mapProperties(JsonNode jsonNodeTree, JSONSchemaPropsBuilder specBuilder, JSONSchemaPropsBuilder statusBuilder) {
-		mapper.getCreateSchema().ifPresent(crtSch -> mapper.getPatchSchema().ifPresent(uptSch -> {
-			JsonNode crtSchema = jsonNodeTree.at(removeLeadingHash(crtSch.getRef()));
-			JsonNode uptSchema = jsonNodeTree.at(removeLeadingHash(uptSch.getRef()));
-			Set<Entry<String, JsonNode>> unionOfFields = unionOfFields(crtSchema.get("properties"), uptSchema.get("properties"));
+		Set<Entry<String, JsonNode>> allSpecFields = mapper.getCreateSchema().flatMap(crtSch -> mapper.getPatchSchema().or(mapper::getPutSchema).map(uptSch -> {
+			JsonNode crtSchemaProps = Optional.ofNullable(crtSch.getRef())
+					.map(s -> jsonNodeTree.at(removeLeadingHash(s)))
+					.map(n -> n.get(ATTR_PROPS)).orElse(null);
+			JsonNode uptSchemaProps = Optional.ofNullable(uptSch.getRef())
+					.map(s -> jsonNodeTree.at(removeLeadingHash(s)))
+					.map(n -> n.get(ATTR_PROPS)).orElse(null);
+			Set<Entry<String, JsonNode>> unionOfFields = unionOfFields(crtSchemaProps, uptSchemaProps);
 			addMissingFieldsFromPathParamMappings(unionOfFields, "spec");
 			mapProperties(specBuilder, unionOfFields, jsonNodeTree);
-			Set<Entry<String, JsonNode>> fieldsOfNotIn = fieldsOfNotIn(jsonNodeTree.at(removeLeadingHash(mapper.getByIdSchema().getRef())).get("properties"), unionOfFields.stream().map(Entry::getKey).toList());
-			addMissingFieldsFromPathParamMappings(fieldsOfNotIn, "status");
-			mapProperties(statusBuilder, fieldsOfNotIn, jsonNodeTree);
-
-		}));
+			return unionOfFields;
+		})).orElse(Collections.emptySet());
+		
+		JsonNode getSchemaProps = Optional.ofNullable(mapper.getByIdSchema().getRef())
+				.map(s -> jsonNodeTree.at(removeLeadingHash(s)))
+				.map(n -> n.get(ATTR_PROPS)).orElse(null);
+		Set<Entry<String, JsonNode>> fieldsOfNotIn = fieldsOfNotIn(getSchemaProps, allSpecFields.stream().map(Entry::getKey).toList());
+		addMissingFieldsFromPathParamMappings(fieldsOfNotIn, "status");
+		mapProperties(statusBuilder, fieldsOfNotIn, jsonNodeTree);
 	}
+	
+	
 	
 	private void addMissingFieldsFromPathParamMappings(Set<Entry<String, JsonNode>> fields, String prefix) {
 		resolver.getPathParamMappingKeys().stream()
@@ -156,6 +171,7 @@ public class CrdResourceGen {
 		return mapper.getByIdPath().filter(p -> s.equals(p.getKey())).isPresent()
 		|| mapper.createPath().filter(p -> s.equals(p.getKey())).isPresent()
 		|| mapper.patchPath().filter(p -> s.equals(p.getKey())).isPresent()
+		|| mapper.putPath().filter(p -> s.equals(p.getKey())).isPresent()
 		|| mapper.deletePath().filter(p -> s.equals(p.getKey())).isPresent();
 	}
 	
@@ -173,16 +189,17 @@ public class CrdResourceGen {
 	
 	private void mapProperties(JSONSchemaPropsBuilder builder, Set<Entry<String, JsonNode>> fields, JsonNode jsonNodeTree, Set<JsonNode> visitedNodes) {
 		mapPrimitiveTypeProps(builder, fields);
-		mapArrayTypeProps(builder, fields, jsonNodeTree);
-		mapObjectTypeProps(builder, jsonNodeTree, visitedNodes, fields);
+		mapArrayTypeProps(builder, fields, jsonNodeTree, visitedNodes);
+		mapObjectTypeProps(builder, fields, jsonNodeTree, visitedNodes);
 	}
 	
-	private void mapArrayTypeProps(JSONSchemaPropsBuilder builder, Set<Entry<String, JsonNode>> fields, JsonNode jsonNodeTree) {
+	private void mapArrayTypeProps(JSONSchemaPropsBuilder builder, Set<Entry<String, JsonNode>> fields, JsonNode jsonNodeTree, Set<JsonNode> visitedNodes) {
 		fields.stream()
 			.filter(f -> f.getValue().get("type") != null)
 			.filter(f -> "array".equals(f.getValue().get("type").asText()))
 			.filter(f -> f.getValue().get("items") != null)
 			.forEach(f -> {
+				LOG.info("Array {} ",f.getKey());
 				JSONSchemaPropsBuilder jsonSchemaPropsBuilder = new JSONSchemaPropsBuilder();
 				JSONSchemaPropsBuilder itemPropsBuilder = new JSONSchemaPropsBuilder();
 				if (f.getValue().get("items").get("type") != null) {
@@ -190,7 +207,11 @@ public class CrdResourceGen {
 				}
 				if (f.getValue().get("items").get("$ref") != null) {
 					JsonNode schema = jsonNodeTree.at(removeLeadingHash(f.getValue().get("items").get("$ref").asText()));
-					mapProperties(itemPropsBuilder, fields(schema.get("properties")), jsonNodeTree, new HashSet<>());
+					LOG.info("Schema {} ", f.getValue().get("items").get("$ref"));
+					if(!visitedNodes.contains(schema)) {
+						visitedNodes.add(schema);
+						mapProperties(itemPropsBuilder, fields(schema.get(ATTR_PROPS)), jsonNodeTree, visitedNodes);
+					}
 					itemPropsBuilder.withType("object");
 				}
 				builder.addToProperties(f.getKey(),
@@ -206,8 +227,8 @@ public class CrdResourceGen {
 						new JSONSchemaPropsBuilder().withType(f.getValue().get("type").asText()).build()));
 	}
 	
-	private void mapObjectTypeProps(JSONSchemaPropsBuilder builder, JsonNode jsonNodeTree,
-			Set<JsonNode> visitedNodes, Set<Entry<String, JsonNode>> fields) {
+	private void mapObjectTypeProps(JSONSchemaPropsBuilder builder, Set<Entry<String, JsonNode>> fields, JsonNode jsonNodeTree,
+			Set<JsonNode> visitedNodes) {
 		fields.stream()
 			.filter(f -> f.getValue().get("$ref") != null)
 			.forEach(f -> {
@@ -215,7 +236,7 @@ public class CrdResourceGen {
 				if(!visitedNodes.contains(schema)) {
 					visitedNodes.add(schema);
 					JSONSchemaPropsBuilder objectTypeBuilder = new JSONSchemaPropsBuilder();
-					mapProperties(objectTypeBuilder, fields(schema.get("properties")), jsonNodeTree, visitedNodes);
+					mapProperties(objectTypeBuilder, fields(schema.get(ATTR_PROPS)), jsonNodeTree, visitedNodes);
 					builder.addToProperties(f.getKey(),
 							objectTypeBuilder.withType("object").build());
 				}
@@ -224,24 +245,32 @@ public class CrdResourceGen {
 
 	private Set<Entry<String, JsonNode>> unionOfFields(JsonNode a, JsonNode b) {
 		Set<Entry<String, JsonNode>> union = new LinkedHashSet<>();
-		a.fields().forEachRemaining(union::add);
-		b.fields().forEachRemaining(union::add);
+		if (a != null) {
+			a.fields().forEachRemaining(union::add);
+		}
+		if (b != null) {
+			b.fields().forEachRemaining(union::add);
+		}
 		return union;
 	}
 	
 	private Set<Entry<String, JsonNode>> fields(JsonNode a) {
 		Set<Entry<String, JsonNode>> fields = new LinkedHashSet<>();
-		a.fields().forEachRemaining(fields::add);
+		if (a != null) {
+			a.fields().forEachRemaining(fields::add);
+		}
 		return fields;
 	}
 	
 	private Set<Entry<String, JsonNode>> fieldsOfNotIn(JsonNode a, Collection<String> b) {
 		Set<Entry<String, JsonNode>> exclusiveSet = new LinkedHashSet<>();
-		a.fields().forEachRemaining(e -> {
-			if (!b.contains(e.getKey())) {
-				exclusiveSet.add(e);
-			}
-		});
+		if (a != null) {
+			a.fields().forEachRemaining(e -> {
+				if (!b.contains(e.getKey())) {
+					exclusiveSet.add(e);
+				}
+			});
+		}
 		return exclusiveSet;
 	}
 	

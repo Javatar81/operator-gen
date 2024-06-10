@@ -26,5 +26,7 @@ public interface CrudMapper {
 
 	Optional<Schema> getPutSchema();
 
+	Optional<Schema> resolveRef(Schema proxy);
+
 
 }

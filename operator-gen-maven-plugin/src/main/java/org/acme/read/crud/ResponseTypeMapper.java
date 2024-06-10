@@ -95,7 +95,8 @@ public class ResponseTypeMapper implements CrudMapper {
 		
 	}
 	
-	private Optional<Schema> resolveRef(Schema proxy) {
+	@Override
+	public Optional<Schema> resolveRef(Schema proxy) {
 		if (StringUtil.isNullOrEmpty(proxy.getRef())){
 			return Optional.of(proxy);
 		} else {
