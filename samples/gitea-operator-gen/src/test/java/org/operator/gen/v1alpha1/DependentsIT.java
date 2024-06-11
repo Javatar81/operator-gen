@@ -20,8 +20,6 @@ import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.kiota.http.vertx.VertXRequestAdapter;
 import io.vertx.core.Vertx;
-import io.vertx.ext.web.client.WebClient;
-import io.vertx.ext.web.client.WebClientSession;
 import jakarta.inject.Inject;
 
 public abstract class DependentsIT<T, U extends CustomResource<?, ?>> {
@@ -32,7 +30,7 @@ public abstract class DependentsIT<T, U extends CustomResource<?, ?>> {
 	@Inject
 	Vertx vertx;
 	@Inject
-	HeaderAuthentication auth;
+	AuthHeaderClientProvider clientProvider;
 	@ConfigProperty(name = "gitea.api.uri")
 	String giteaApiUri;
 	@ConfigProperty(name = "test.kubernetes.namespace")
@@ -40,10 +38,7 @@ public abstract class DependentsIT<T, U extends CustomResource<?, ?>> {
 
 	@BeforeEach
    	void setUp() {
-    	WebClient webClient = WebClient.create(vertx);
-		WebClientSession webClientSession = WebClientSession.create(webClient);
-		auth.addAuthHeaders(webClientSession);
-		VertXRequestAdapter requestAdapter = new VertXRequestAdapter(webClientSession);
+		VertXRequestAdapter requestAdapter = new VertXRequestAdapter(clientProvider.provide());
 		requestAdapter.setBaseUrl(giteaApiUri);
 		apiClient = new ApiClient(requestAdapter);
    	}

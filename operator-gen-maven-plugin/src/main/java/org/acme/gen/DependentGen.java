@@ -64,8 +64,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 
 public class DependentGen {
-	private static final String FIELD_AUTHENTICATION = "authentication";
-	private static final String VAR_WEB_CLIENT_SESSION = "webClientSession";
+	private static final String FIELD_CLIENT_PROVIDER = "clientProvider";
+	//private static final String VAR_WEB_CLIENT_SESSION = "webClientSession";
 	private static final String FIELD_API_CLIENT = "apiClient";
 	private static final String FIELD_NAME_VERTX = "vertx";
 	private static final String NAME_POSTFIX = "Dependent";
@@ -121,13 +121,9 @@ public class DependentGen {
 				new SimpleName(PerResourcePollingDependentResource.class.getSimpleName()),
 				new NodeList<>(resourceType, crdType));
 		
-		
-		
-		
 		ClassOrInterfaceDeclaration clazz = cu.addClass(className, Keyword.PUBLIC)
 				.addExtendedType(dependentType);
 				
-		
 		fields(clazz);
 		constructor(clazz);
 		initClientMethod(clazz);
@@ -196,16 +192,16 @@ public class DependentGen {
 				.addAnnotation(PostConstruct.class);
 		
 		
-		ClassOrInterfaceType webClientSessionType = new ClassOrInterfaceType(null, WebClientSession.class.getSimpleName());
-		ClassOrInterfaceType webClientType = new ClassOrInterfaceType(null, WebClient.class.getSimpleName());
+		//ClassOrInterfaceType webClientSessionType = new ClassOrInterfaceType(null, WebClientSession.class.getSimpleName());
+		//ClassOrInterfaceType webClientType = new ClassOrInterfaceType(null, WebClient.class.getSimpleName());
 		ClassOrInterfaceType vertxRequestAdapterType = new ClassOrInterfaceType(null, VertXRequestAdapter.class.getSimpleName());
 		ClassOrInterfaceType apiClientType = new ClassOrInterfaceType(null, "ApiClient");
 		
 		NodeList<Statement> initClientStatements = new NodeList<>();
 		
-		initClientStatements.add(new ExpressionStmt(new AssignExpr(new VariableDeclarationExpr(webClientSessionType, VAR_WEB_CLIENT_SESSION), new MethodCallExpr(new TypeExpr(webClientSessionType), "create", new NodeList<>(new MethodCallExpr(new TypeExpr(webClientType), "create", new NodeList<>(new NameExpr(FIELD_NAME_VERTX))))), Operator.ASSIGN)));
-		initClientStatements.add(new ExpressionStmt(new MethodCallExpr(new NameExpr(FIELD_AUTHENTICATION), "addAuthHeaders", new NodeList<>(new NameExpr(VAR_WEB_CLIENT_SESSION)))));
-		initClientStatements.add(new ExpressionStmt(new AssignExpr(new VariableDeclarationExpr(vertxRequestAdapterType, "requestAdapter"), new ObjectCreationExpr(null, vertxRequestAdapterType, new NodeList<>(new NameExpr(VAR_WEB_CLIENT_SESSION))), Operator.ASSIGN)));
+		//initClientStatements.add(new ExpressionStmt(new AssignExpr(new VariableDeclarationExpr(webClientSessionType, VAR_WEB_CLIENT_SESSION), new MethodCallExpr(new TypeExpr(webClientSessionType), "create", new NodeList<>(new MethodCallExpr(new TypeExpr(webClientType), "create", new NodeList<>(new NameExpr(FIELD_NAME_VERTX))))), Operator.ASSIGN)));
+		//initClientStatements.add(new ExpressionStmt(new MethodCallExpr(new NameExpr(FIELD_CLIENT_PROVIDER), "provide", new NodeList<>())));
+		initClientStatements.add(new ExpressionStmt(new AssignExpr(new VariableDeclarationExpr(vertxRequestAdapterType, "requestAdapter"), new ObjectCreationExpr(null, vertxRequestAdapterType, new NodeList<>(new MethodCallExpr(new NameExpr(FIELD_CLIENT_PROVIDER), "provide", new NodeList<>()))), Operator.ASSIGN)));
 		initClientStatements.add(new ExpressionStmt(new MethodCallExpr(new NameExpr("urlProvider"), "provide", new NodeList<>(new NameExpr("requestAdapter")))));
 		initClientStatements.add(new ExpressionStmt(new AssignExpr(new NameExpr(FIELD_API_CLIENT), new ObjectCreationExpr(null, apiClientType, new NodeList<>(new NameExpr("requestAdapter"))), Operator.ASSIGN)));
 		initClientMethod.setBody(new BlockStmt(initClientStatements));
@@ -214,7 +210,7 @@ public class DependentGen {
 	private void fields(ClassOrInterfaceDeclaration clazz) {
 		clazz.addField(Vertx.class, FIELD_NAME_VERTX).addAnnotation(Inject.class);
 		clazz.addField("ApiClient", FIELD_API_CLIENT, Keyword.PRIVATE);
-		clazz.addField("HeaderAuthentication", FIELD_AUTHENTICATION).addAnnotation(Inject.class);
+		clazz.addField("WebClientProvider", FIELD_CLIENT_PROVIDER).addAnnotation(Inject.class);
 		clazz.addField("BaseUrlProvider", "urlProvider").addAnnotation(Inject.class);
 	}
 
