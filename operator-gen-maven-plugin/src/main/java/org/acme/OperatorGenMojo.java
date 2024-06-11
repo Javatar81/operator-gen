@@ -61,7 +61,7 @@ public class OperatorGenMojo
 	private List<String> pathParamMappings = null;
 	
 	@Parameter(property = "crdCustomizations", required = false)
-	private Properties crdCustomizations = null;
+	private Properties crdCustomizations = new Properties();
 	
     /**
      * Location of the generated source code.

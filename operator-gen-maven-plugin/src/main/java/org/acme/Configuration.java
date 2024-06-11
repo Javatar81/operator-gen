@@ -45,8 +45,12 @@ public class Configuration {
 	}
 	
 	public List<String> getIgnoreProps() {
-		String ignoreProps = crdCustomizations.get("ignoreProps").toString();
-		return Arrays.asList(ignoreProps.split(","));
+		if (crdCustomizations.get("ignoreProps") != null) {
+			String ignoreProps = crdCustomizations.get("ignoreProps").toString();
+			return Arrays.asList(ignoreProps.split(","));
+		} else {
+			return Collections.emptyList();
+		}
 	}
 
 }
