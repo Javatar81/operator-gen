@@ -70,6 +70,7 @@ public class KiotaMethodCallFactory implements ApiClientMethodCallFactory {
 		MethodCallExpr methodCallExpr;
 		if (methodName.startsWith("{")) {
 			methodName = "by" + Character.toUpperCase(methodName.charAt(1)) + methodName.substring(2, methodName.length() - 1);
+			methodName = replaceDashes(methodName);
 			methodCallExpr = new MethodCallExpr(prev, methodName, args.size() > 1 ? new NodeList<>(args.remove(0)) : args);
 		} else {
 			methodCallExpr = new MethodCallExpr(prev, methodName);
@@ -79,6 +80,21 @@ public class KiotaMethodCallFactory implements ApiClientMethodCallFactory {
 		} else {
 			return methodCallExpr;
 		}
+	}
+	
+	private static String replaceDashes(String methodName) {
+		int dashIndex = methodName.indexOf("-"); 
+		while(dashIndex > -1) {
+			methodName = methodName.substring(0, dashIndex) 
+					+ String.valueOf(methodName.charAt(dashIndex + 1)).toUpperCase() 
+					+ methodName.substring(dashIndex + 2, methodName.length());
+			dashIndex = methodName.indexOf("-");
+		}
+		return methodName;
+	}
+	
+	public static void main(String[] args) {
+		System.out.println(replaceDashes("abcd-efg"));
 	}
 
 }

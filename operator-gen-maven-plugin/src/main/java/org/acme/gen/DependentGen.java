@@ -10,6 +10,7 @@ import java.util.Set;
 import org.acme.client.ApiClientMethodCallFactory;
 import org.acme.read.crud.CrudMapper;
 import org.eclipse.microprofile.openapi.models.Operation;
+import org.eclipse.microprofile.openapi.models.media.Schema;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier.Keyword;
@@ -41,7 +42,6 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.TryStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
 import com.github.javaparser.utils.SourceRoot;
 import com.microsoft.kiota.ApiException;
@@ -58,8 +58,6 @@ import io.javaoperatorsdk.operator.processing.dependent.external.PerResourcePoll
 import io.kiota.http.vertx.VertXRequestAdapter;
 import io.kiota.serialization.json.JsonParseNodeFactory;
 import io.vertx.core.Vertx;
-import io.vertx.ext.web.client.WebClient;
-import io.vertx.ext.web.client.WebClientSession;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 
@@ -101,8 +99,6 @@ public class DependentGen {
 		cu.addImport(resource.toString());
 		cu.addImport(Vertx.class);
 		cu.addImport(PostConstruct.class);
-		cu.addImport(WebClientSession.class);
-		cu.addImport(WebClient.class);
 		cu.addImport(VertXRequestAdapter.class);
 		cu.addImport(Inject.class);
 		cu.addImport(Context.class);
@@ -130,11 +126,9 @@ public class DependentGen {
 		desiredMethod(clazz);
 		fetchMethod(clazz);
 		mapper.createPath()
-				.map(e -> e.getValue().getPOST().getRequestBody().getContent().getMediaType("application/json"))
-				.map(m -> m.getSchema().getRef())
-				.map(r -> r.substring(r.lastIndexOf("/") + 1, r.length()))
-				.ifPresent(t -> 
-					createMethod(cu, clazz, new ClassOrInterfaceType(null, t))
+				.map(e -> e.getValue().getPOST())
+				.ifPresent(op -> 
+					createMethod(cu, clazz, op)
 				);
 		mapper.patchPath()
 				.map(e -> e.getValue().getPATCH())
@@ -219,26 +213,42 @@ public class DependentGen {
 				new MethodCallExpr("super", new FieldAccessExpr(new TypeExpr(resourceType), "class"))))));
 	}
 
-	private void createMethod(CompilationUnit cu, ClassOrInterfaceDeclaration clazz, Type createOptionType) {
-		cu.addImport(resource.getQualifier().map(Name::toString).orElse("") + "." + createOptionType);
-		cu.addImport(Creator.class);
-		ClassOrInterfaceType creatorType = new ClassOrInterfaceType(null,
-				new SimpleName(Creator.class.getSimpleName()),
-				new NodeList<>(resourceType, crdType));
-		clazz.addImplementedType(creatorType);
-		MethodDeclaration createMethod = clazz.addMethod("create", Keyword.PUBLIC)
-				.addAnnotation(Override.class)
-				.addParameter(resourceType, "desired")
-				.addParameter(crdType, "primary")
-				.addParameter(contextType, "context")
-				.setType(resourceType);
-		Optional<MethodCallExpr> createCall = methodCalls.create(new NameExpr(FIELD_API_CLIENT), new NameExpr("primary"), new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primary"), "getMetadata"),
-				"getName")),
-				new NodeList<>(new NameExpr("createOption")));
-		AssignExpr assignCreateOpt = new AssignExpr(new VariableDeclarationExpr(createOptionType, "createOption"), new MethodCallExpr(null, "fromResource", new NodeList<>(new NameExpr("primary"), new MethodReferenceExpr(new TypeExpr(createOptionType), new NodeList<>(),"createFromDiscriminatorValue"))),Operator.ASSIGN);
-		ReturnStmt createReturn = createCall
-			.map(m -> new ReturnStmt(m)).orElse(new ReturnStmt(new NullLiteralExpr()));
-		createMethod.setBody(new BlockStmt(new NodeList<>(new ExpressionStmt(assignCreateOpt), createReturn)));
+	private void createMethod(CompilationUnit cu, ClassOrInterfaceDeclaration clazz, Operation op) {
+		Schema schema = op.getRequestBody().getContent().getMediaType("application/json").getSchema();
+		String typeName;
+		if (schema.getRef() != null) {
+			typeName = schema.getRef().substring(schema.getRef().lastIndexOf("/") + 1, schema.getRef().length());
+			ClassOrInterfaceType createOptionType = new ClassOrInterfaceType(null, typeName);
+			
+			cu.addImport(resource.getQualifier().map(Name::toString).orElse("") + "." + createOptionType);
+			cu.addImport(Creator.class);
+			ClassOrInterfaceType creatorType = new ClassOrInterfaceType(null,
+					new SimpleName(Creator.class.getSimpleName()),
+					new NodeList<>(resourceType, crdType));
+			clazz.addImplementedType(creatorType);
+			MethodDeclaration createMethod = clazz.addMethod("create", Keyword.PUBLIC)
+					.addAnnotation(Override.class)
+					.addParameter(resourceType, "desired")
+					.addParameter(crdType, "primary")
+					.addParameter(contextType, "context")
+					.setType(resourceType);
+			Optional<MethodCallExpr> createCall = methodCalls.create(new NameExpr(FIELD_API_CLIENT), new NameExpr("primary"), new NodeList<>(new MethodCallExpr(new MethodCallExpr(new NameExpr("primary"), "getMetadata"),
+					"getName")),
+					new NodeList<>(new NameExpr("createOption")));
+			AssignExpr assignCreateOpt = new AssignExpr(new VariableDeclarationExpr(createOptionType, "createOption"), new MethodCallExpr(null, "fromResource", new NodeList<>(new NameExpr("primary"), new MethodReferenceExpr(new TypeExpr(createOptionType), new NodeList<>(),"createFromDiscriminatorValue"))),Operator.ASSIGN);
+			BlockStmt body = new BlockStmt(new NodeList<>(new ExpressionStmt(assignCreateOpt)));
+			ReturnStmt createReturn;
+			if (op.getResponses().getAPIResponse("201") != null && op.getResponses().getAPIResponse("201").getContent() != null) {
+				createReturn = createCall
+					.map(m -> new ReturnStmt(m)).orElse(new ReturnStmt(new NullLiteralExpr()));
+			} else {
+				createCall
+					.ifPresent(m -> body.addStatement(m));
+				createReturn = new ReturnStmt(new NameExpr("desired"));
+			}
+			body.addStatement(createReturn);
+			createMethod.setBody(body);
+		}
 	}
 	
 	private void updateMethod(CompilationUnit cu, ClassOrInterfaceDeclaration clazz, Operation op) {

@@ -34,7 +34,8 @@ public class ParameterResolver {
 		Optional<Operation> oneOfIdOps = Optional.ofNullable(pathItem.getGET())
 			.or(() -> Optional.ofNullable(pathItem.getPATCH()))
 			.or(() -> Optional.ofNullable(pathItem.getDELETE()));
-		return oneOfIdOps.map(o -> o.getParameters().get(paramIndex));
+		return oneOfIdOps.map(o -> o.getParameters()).or(() -> Optional.ofNullable(pathItem.getParameters()))
+				.map(p -> p.get(paramIndex));
 	}
 	
 	public NodeList<Expression> resolveArgs(String path, NameExpr primary, NodeList<Expression> defaultArgs) {
