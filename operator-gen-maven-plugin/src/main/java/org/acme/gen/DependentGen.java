@@ -4,6 +4,8 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
 
@@ -236,7 +238,8 @@ public class DependentGen {
 					"getName")),
 					new NodeList<>(new NameExpr("createOption")));
 			AssignExpr assignCreateOpt = new AssignExpr(new VariableDeclarationExpr(createOptionType, "createOption"), new MethodCallExpr(null, "fromResource", new NodeList<>(new NameExpr("primary"), new MethodReferenceExpr(new TypeExpr(createOptionType), new NodeList<>(),"createFromDiscriminatorValue"))),Operator.ASSIGN);
-			BlockStmt body = new BlockStmt(new NodeList<>(new ExpressionStmt(assignCreateOpt)));
+			MethodCallExpr clearAdditionalData = new MethodCallExpr(new MethodCallExpr(new NameExpr("createOption"), "getAdditionalData"), "clear");
+			BlockStmt body = new BlockStmt(new NodeList<>(new ExpressionStmt(assignCreateOpt), new ExpressionStmt(clearAdditionalData)));
 			ReturnStmt createReturn;
 			if (op.getResponses().getAPIResponse("201") != null && op.getResponses().getAPIResponse("201").getContent() != null) {
 				createReturn = createCall
@@ -273,7 +276,8 @@ public class DependentGen {
 						"getName")),
 				new NodeList<>(new NameExpr("editOption")));
 		AssignExpr assignUpdateOpt = new AssignExpr(new VariableDeclarationExpr(updateOptionType, "editOption"), new MethodCallExpr(null, "fromResource", new NodeList<>(new NameExpr("primary"), new MethodReferenceExpr(new TypeExpr(updateOptionType), new NodeList<>(),"createFromDiscriminatorValue"))),Operator.ASSIGN);
-		BlockStmt body = new BlockStmt(new NodeList<>(new ExpressionStmt(assignUpdateOpt)));
+		MethodCallExpr clearAdditionalData = new MethodCallExpr(new MethodCallExpr(new NameExpr("editOption"), "getAdditionalData"), "clear");
+		BlockStmt body = new BlockStmt(new NodeList<>(new ExpressionStmt(assignUpdateOpt), new ExpressionStmt(clearAdditionalData)));
 		ReturnStmt updateReturn;
 		if (op.getResponses().getAPIResponse("200") != null && op.getResponses().getAPIResponse("200").getContent() != null) {
 			updateReturn = updateCall
@@ -316,9 +320,9 @@ public class DependentGen {
 				.ifPresent(m -> {
 					ReturnStmt returnEmptySet = new ReturnStmt(new MethodCallExpr(new TypeExpr(collectionsType),
 							"emptySet", new NodeList<>()));
+					System.out.println("Args: " + allArguments(m));
 					boolean methodChainContainsGetSpec = methodChainContains(m, "getSpec");
 					boolean methodChainContainsGetStatus = methodChainContains(m, "getStatus");
-					//if ()
 					var nodesInTry = new NodeList<Statement>();
 					if (methodChainContainsGetSpec || methodChainContainsGetStatus) {
 						BinaryExpr ifCondition;
@@ -333,13 +337,41 @@ public class DependentGen {
 						} else {
 							ifCondition = null;
 						}
-						nodesInTry.add(new IfStmt(ifCondition, returnEmptySet, null));
+						nodesInTry.add(new IfStmt(createNullGuardsForParams(ifCondition, m), returnEmptySet, null));
 					}
 					nodesInTry.add(new ReturnStmt(new MethodCallExpr(new TypeExpr(setType),
 							"of", new NodeList<>(new MethodCallExpr(m, "get")))));
 					fetchResourcesMethod
 							.setBody(new BlockStmt(new NodeList<>(new TryStmt(new BlockStmt(nodesInTry), new NodeList<>(catch404()), null))));
 				});
+	}
+	
+	private BinaryExpr createNullGuardsForParams(BinaryExpr leftSide, MethodCallExpr methodCallExpr) {
+		Set<MethodCallExpr> allArguments = allArguments(methodCallExpr);
+		if(allArguments.isEmpty()) {
+			return leftSide;
+		} else {
+			BinaryExpr last = leftSide;
+			Iterator<MethodCallExpr> iterator = allArguments.iterator();
+			do {
+				MethodCallExpr methodExpr = iterator.next();
+				BinaryExpr nextBinExpr = new BinaryExpr(last, new BinaryExpr(methodExpr, new NullLiteralExpr(), com.github.javaparser.ast.expr.BinaryExpr.Operator.EQUALS), com.github.javaparser.ast.expr.BinaryExpr.Operator.OR);
+				if (!iterator.hasNext()) {
+					return nextBinExpr;
+				} else {
+					last = nextBinExpr;
+				}
+			} while (true);
+		}
+	}
+	
+	
+	
+	private Set<MethodCallExpr> allArguments(MethodCallExpr methodCallExpr) {
+		Set<MethodCallExpr> args = new HashSet<>();
+		args.addAll(methodCallExpr.getArguments().stream().filter(a -> a.isMethodCallExpr()).map(a -> a.asMethodCallExpr()).toList());
+		args.addAll(methodCallExpr.getScope().stream().filter(a -> a.isMethodCallExpr()).map(a -> a.asMethodCallExpr()).flatMap(m -> allArguments(m).stream()).toList());
+		return args;
 	}
 	
 	private boolean methodChainContains(MethodCallExpr methodCallExpr, String methodName) {
@@ -355,7 +387,6 @@ public class DependentGen {
 						.map(m -> methodChainContains(m, methodName)).orElse(false);
 			}
 		}
-
 	}
 	
 	private CatchClause catch404() {
