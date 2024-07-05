@@ -133,7 +133,7 @@ public class OperatorGenMojo
 		reconciler.create();
 		
 		
-		DependentGen dependent = new DependentGen(sourceDestinationFolder.toPath(), new Name(qualifierWithVersion, className), resource, methodCalls, mapper);
+		DependentGen dependent = new DependentGen(sourceDestinationFolder.toPath(), new Name(qualifierWithVersion, className), resource, methodCalls, mapper, resolver);
 		dependent.create();
 	}
     

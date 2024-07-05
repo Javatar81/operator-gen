@@ -147,7 +147,7 @@ public class CrdResourceGen {
 				List<String> paramMappingValueList = resolver.paramMappingValueList(resolver.getPathParamMappings().get(s));
 				List<FieldNameType> fieldEntries = new ArrayList<>(); 
 				for (int i = 0; i < paramMappingValueList.size(); i++) {
-					fieldEntries.add(new FieldNameType(paramMappingValueList.get(i), resolver.getParameterType(s, i)
+					fieldEntries.add(new FieldNameType(paramMappingValueList.get(i), resolver.getParameter(s, i)
 							.map(p -> p.getSchema().getType().toString()).orElse("string")));
 				}
 				return fieldEntries.stream();

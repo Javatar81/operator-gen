@@ -1,6 +1,9 @@
 package org.acme.client;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,13 +32,48 @@ public class ParameterResolver {
 		this.openApiDoc = openApiDoc;
 	}
 	
-	public Optional<Parameter> getParameterType(String path, int paramIndex) {
-		PathItem pathItem = openApiDoc.getPaths().getPathItem(path);
-		Optional<Operation> oneOfIdOps = Optional.ofNullable(pathItem.getGET())
-			.or(() -> Optional.ofNullable(pathItem.getPATCH()))
-			.or(() -> Optional.ofNullable(pathItem.getDELETE()));
-		return oneOfIdOps.map(o -> o.getParameters()).or(() -> Optional.ofNullable(pathItem.getParameters()))
-				.map(p -> p.get(paramIndex));
+	public Map<String, String> getParameterNameMappings(String path) {
+		if (config.getPathParamMappings().containsKey(path)) {
+			Map<String, String> parameterNameMappings = new HashMap<>();
+			
+			List<String> paramMappingValueList = paramMappingValueList(config.getPathParamMappings().get(path));
+			for (int i = 0; i < paramMappingValueList.size(); i++) {
+				if (getParameter(path, i).isPresent()) {
+					parameterNameMappings.put(getParameter(path, i).get().getName(), attributeName(paramMappingValueList.get(i)));				
+				}
+			}
+			return parameterNameMappings;
+		} else {
+			return Collections.emptyMap();
+		}
+	}
+	
+	public List<Parameter> getParameters(String path) {
+		List<Parameter> params = new ArrayList<>();
+		Optional<Parameter> parameter = getParameter(path, 0);
+		for (int i = 0; parameter.isPresent(); i++) {
+			params.add(parameter.get());
+			parameter = getParameter(path, i + 1);
+		}
+		return params;
+	}
+	
+	private String attributeName(String mappingValue) {
+		String[] valueSplit = mappingValue.split("\\.");
+		return valueSplit[valueSplit.length - 1];
+	}
+	
+	public Optional<Parameter> getParameter(String path, int paramIndex) {
+		Optional<PathItem> pathItem = Optional.ofNullable(openApiDoc.getPaths().getPathItem(path));
+		return pathItem.flatMap(p -> {
+			Optional<Operation> oneOfIdOps = Optional.ofNullable(p.getGET())
+					.or(() -> Optional.ofNullable(p.getPATCH()))
+					.or(() -> Optional.ofNullable(p.getDELETE()));
+				return oneOfIdOps.map(o -> o.getParameters()).or(() -> Optional.ofNullable(p.getParameters()))
+						.filter(ps -> ps.size() > paramIndex)
+						.map(ps -> ps.get(paramIndex));
+		});
+		
 	}
 	
 	public NodeList<Expression> resolveArgs(String path, NameExpr primary, NodeList<Expression> defaultArgs) {
@@ -85,4 +123,7 @@ public class ParameterResolver {
 		return str.substring(0, 1).toUpperCase() + str.substring(1);
 	}
 	
+	public static void main(String[] args) {
+		
+	}
 }
