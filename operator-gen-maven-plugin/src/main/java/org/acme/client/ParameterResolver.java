@@ -16,6 +16,8 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.parameters.Parameter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.Expression;
@@ -23,7 +25,7 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 
 public class ParameterResolver {
-	
+	private static final Logger LOG = LoggerFactory.getLogger(ParameterResolver.class);
 	private final Configuration config;
 	private final OpenAPI openApiDoc;
 
@@ -65,15 +67,37 @@ public class ParameterResolver {
 	
 	public Optional<Parameter> getParameter(String path, int paramIndex) {
 		Optional<PathItem> pathItem = Optional.ofNullable(openApiDoc.getPaths().getPathItem(path));
-		return pathItem.flatMap(p -> {
-			Optional<Operation> oneOfIdOps = Optional.ofNullable(p.getGET())
-					.or(() -> Optional.ofNullable(p.getPATCH()))
-					.or(() -> Optional.ofNullable(p.getDELETE()));
-				return oneOfIdOps.map(o -> o.getParameters()).or(() -> Optional.ofNullable(p.getParameters()))
-						.filter(ps -> ps.size() > paramIndex)
-						.map(ps -> ps.get(paramIndex));
-		});
-		
+		LOG.debug("Resolving param {} for path {} ", path, paramIndex);
+		return pathItem.
+				flatMap(p -> {
+					Optional<Operation> oneOfIdOps = Optional.ofNullable(p.getGET())
+							.or(() -> Optional.ofNullable(p.getPATCH())).or(() -> Optional.ofNullable(p.getDELETE()));
+					oneOfIdOps.ifPresent(o -> LOG.debug("Op is {}", o.getSummary()));
+					return extractParameter(oneOfIdOps.map(o -> o.getParameters()), path, paramIndex)
+							.or(() -> extractParameter(Optional.ofNullable(p.getParameters()), path, paramIndex));
+				});
+	}
+	
+	private Optional<Parameter> extractParameter(Optional<List<Parameter>> params, String path, int paramIndex) {
+		return params.filter(ps -> ps.size() > paramIndex)
+		.map(ps -> ps.get(paramIndex))
+		.filter(param -> 
+			param.getName().equals(getParameterName(path, paramIndex).orElse(null))
+		);
+	}
+	
+	private Optional<String> getParameterName(String path, int paramIndex) {
+		String[] pathSegements = path.split("/");
+		int paramCount = 0;
+		for (int i = 0; i < pathSegements.length; i++) {
+			if (pathSegements[i].startsWith("{")) {
+				if (paramIndex == paramCount) {
+					return Optional.of(pathSegements[i].substring(1, pathSegements[i].length() -1));
+				}
+				paramCount++;
+			}
+		}
+		return Optional.empty();
 	}
 	
 	public NodeList<Expression> resolveArgs(String path, NameExpr primary, NodeList<Expression> defaultArgs) {
@@ -123,7 +147,4 @@ public class ParameterResolver {
 		return str.substring(0, 1).toUpperCase() + str.substring(1);
 	}
 	
-	public static void main(String[] args) {
-		
-	}
 }

@@ -92,9 +92,5 @@ public class KiotaMethodCallFactory implements ApiClientMethodCallFactory {
 		}
 		return methodName;
 	}
-	
-	public static void main(String[] args) {
-		System.out.println(replaceDashes("abcd-efg"));
-	}
 
 }

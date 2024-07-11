@@ -24,7 +24,7 @@ import io.smallrye.openapi.runtime.OpenApiProcessor;
 import io.smallrye.openapi.runtime.OpenApiStaticFile;
 import io.smallrye.openapi.runtime.io.Format;
 
-public class ParameterResolverTest {
+class ParameterResolverTest {
 
 	private static ParameterResolver parameterResolver;
 

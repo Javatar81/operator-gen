@@ -44,11 +44,13 @@ class ResponseTypeMapperGiteaTest {
 	
 	@BeforeAll
 	public static void setUp() {
+		
 		try (InputStream is = ResponseTypeMapperGiteaTest.class.getClassLoader().getResourceAsStream("gitea.json")) {
 			try (OpenApiStaticFile staticFile = new OpenApiStaticFile(is, Format.JSON)) {
 				OpenApiConfig openApiConfig = new OpenApiConfigImpl(ConfigProvider.getConfig());
 				model = OpenApiProcessor.modelFromStaticFile(openApiConfig, staticFile);
 				reader = new ModelReader(model);
+				reader.setReadSchemas(false);
 			}
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not find [" + OpenApiConstants.BASE_NAME + Format.JSON + "]");
