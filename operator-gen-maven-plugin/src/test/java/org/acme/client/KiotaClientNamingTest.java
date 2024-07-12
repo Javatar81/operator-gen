@@ -56,7 +56,7 @@ class KiotaClientNamingTest {
 	@BeforeEach
 	void setUp() {
 		mapper = Mockito.mock(CrudMapper.class);
-		client = new KiotaMethodCallFactory(mapper, new ParameterResolver(new Configuration(ConfigProvider.getConfig(), new ArrayList<>(), null), null));
+		client = new KiotaMethodCallFactory(mapper, new ParameterResolver(new Configuration(ConfigProvider.getConfig(), new ArrayList<>(), new ArrayList<>(), null), null));
 	}
 
 	@Test

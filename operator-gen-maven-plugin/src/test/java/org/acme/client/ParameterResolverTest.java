@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,7 @@ class ParameterResolverTest {
 						new Configuration(ConfigProvider.getConfig(),
 								List.of("/admin/realms/{realm}/clients=spec.realm",
 										"/admin/realms/{realm}/clients/{client-uuid}=spec.realm|status.uuid"),
-								null),
+								new ArrayList<>(), null),
 						model);
 			}
 		} catch (IOException ex) {

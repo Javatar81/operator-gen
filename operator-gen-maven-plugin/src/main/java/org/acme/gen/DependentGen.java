@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 
 import org.acme.client.ApiClientMethodCallFactory;
 import org.acme.client.ParameterResolver;
+import org.acme.client.ResponseResolver;
 import org.acme.read.crud.CrudMapper;
 import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.media.Schema;
@@ -86,7 +87,8 @@ public class DependentGen {
 	private static final String FIELD_NAME_VERTX = "vertx";
 	private static final String NAME_POSTFIX = "Dependent";
 	private final Path path;
-	private final ParameterResolver resolver;
+	private final ParameterResolver paramResolver;
+	private final ResponseResolver respResolver;
 	private final Name name;
 	private final Name resource;
 	private final ApiClientMethodCallFactory methodCalls;
@@ -96,13 +98,14 @@ public class DependentGen {
 	private final ClassOrInterfaceType resourceType;
 	private final ClassOrInterfaceType collectionsType;
 	
-	public DependentGen(Path path, Name name, Name resource, ApiClientMethodCallFactory methodCalls, CrudMapper mapper, ParameterResolver resolver) {
+	public DependentGen(Path path, Name name, Name resource, ApiClientMethodCallFactory methodCalls, CrudMapper mapper, ParameterResolver paramResolver, ResponseResolver respResolver) {
 		this.path = path;
 		this.name = name;
 		this.resource = resource;
 		this.methodCalls = methodCalls;
 		this.mapper = mapper;
-		this.resolver = resolver;
+		this.paramResolver = paramResolver;
+		this.respResolver = respResolver;
 		crdType = new ClassOrInterfaceType(null, name.toString());
 		contextType = new ClassOrInterfaceType(null,
 				new SimpleName(Context.class.getSimpleName()),
@@ -146,9 +149,9 @@ public class DependentGen {
 		desiredMethod(clazz);
 		fetchMethod(clazz);
 		mapper.createPath()
-			.map(e -> e.getValue().getPOST())
-			.ifPresent(op -> 
-				createMethod(cu, clazz, mapper.getByIdPath().get().getKey(), op)
+			//.map(e -> e.getValue().getPOST())
+			.ifPresent(p -> 
+				createMethod(cu, clazz, p.getKey(), p.getValue().getPOST())
 			);
 		mapper.patchPath()
 				.map(e -> e.getValue().getPATCH())
@@ -264,7 +267,9 @@ public class DependentGen {
 			ReturnStmt createReturn;
 			if (hasPostResponse(op)) {
 				createReturn = createCall
-					.map(ReturnStmt::new).orElse(new ReturnStmt(new NullLiteralExpr()));
+					.map(c -> respResolver.resolveResponse(path, c))	
+					.map(ReturnStmt::new)
+					.orElse(new ReturnStmt(new NullLiteralExpr()));
 			} else {
 				createReturn = extractParamStatements(cu, path, createCall, body);
 			}
@@ -301,7 +306,8 @@ public class DependentGen {
 	}
 
 	private boolean hasPostResponse(Operation op) {
-		return op.getResponses().getAPIResponse("201") != null && op.getResponses().getAPIResponse("201").getContent() != null;
+		return (op.getResponses().getAPIResponse("201") != null && op.getResponses().getAPIResponse("201").getContent() != null)
+				|| (op.getResponses().getAPIResponse("200") != null && op.getResponses().getAPIResponse("200").getContent() != null);
 	}
 	
 	private boolean hasUpdateResponse(Operation op) {
@@ -456,7 +462,7 @@ public class DependentGen {
 	 */
 	private boolean mappedNameMethod(CompilationUnit cu, ClassOrInterfaceDeclaration clazz) {
 		Map<String, String> parameterMap = mapper.getByIdPath()
-				.map(p-> resolver.getParameterNameMappings(p.getKey()))
+				.map(p-> paramResolver.getParameterNameMappings(p.getKey()))
 				.orElse(Collections.emptyMap());
 		NodeList<Expression> methodArgs = new NodeList<>();
 		parameterMap.entrySet().stream()

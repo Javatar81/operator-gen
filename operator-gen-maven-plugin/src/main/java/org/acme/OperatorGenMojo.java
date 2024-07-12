@@ -14,6 +14,7 @@ import java.util.Properties;
 import org.acme.client.ApiClientMethodCallFactory;
 import org.acme.client.KiotaMethodCallFactory;
 import org.acme.client.ParameterResolver;
+import org.acme.client.ResponseResolver;
 import org.acme.gen.CrdResourceGen;
 import org.acme.gen.DependentGen;
 import org.acme.gen.ReconcilerGen;
@@ -60,6 +61,9 @@ public class OperatorGenMojo
 	@Parameter(property = "pathParamMappings", required = false)
 	private List<String> pathParamMappings = null;
 	
+	@Parameter(property = "pathResponseMappings", required = false)
+	private List<String> pathResponseMappings = null;
+	
 	@Parameter(property = "crdCustomizations", required = false)
 	private Properties crdCustomizations = new Properties();
 	
@@ -82,7 +86,7 @@ public class OperatorGenMojo
     public void execute()
         throws MojoExecutionException
     {
-    	config = new Configuration(ConfigProvider.getConfig(), pathParamMappings, crdCustomizations);
+    	config = new Configuration(ConfigProvider.getConfig(), pathParamMappings, pathResponseMappings, crdCustomizations);
         File f = sourceDestinationFolder;
         if ( !f.exists() )
         {
@@ -112,8 +116,9 @@ public class OperatorGenMojo
 		String crdVersion = config.getCrdVersion();
 		String basePackage = config.getCrdPackage();
 		CrudMapper mapper = new ResponseTypeMapper(openApiDoc, responseType);
-		ParameterResolver resolver = new ParameterResolver(config, openApiDoc);
-		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper, resolver);
+		ParameterResolver paramResolver = new ParameterResolver(config, openApiDoc);
+		ResponseResolver respResolver = new ResponseResolver(config);
+		ApiClientMethodCallFactory methodCalls = new KiotaMethodCallFactory(mapper, paramResolver);
 		String className = responseType.substring(0, 1).toUpperCase() + responseType.substring(1);
 		Name crdName = new Name(new Name(basePackage), className);
 		try {
@@ -121,7 +126,7 @@ public class OperatorGenMojo
 			if (!Files.exists(crdResOutputDir)) {
 				Files.createDirectory(crdResOutputDir);
 			}
-			CrdResourceGen resourceGen = new CrdResourceGen(crdResOutputDir.resolve(responseType + ".yaml"), jsonsFile.toPath(), crdName, mapper, resolver, config);
+			CrdResourceGen resourceGen = new CrdResourceGen(crdResOutputDir.resolve(responseType + ".yaml"), jsonsFile.toPath(), crdName, mapper, paramResolver, config);
 			resourceGen.create();
 		} catch (IOException e) {
 			LOG.error(String.format("Error processing response type '%s'", responseType), e);
@@ -133,7 +138,7 @@ public class OperatorGenMojo
 		reconciler.create();
 		
 		
-		DependentGen dependent = new DependentGen(sourceDestinationFolder.toPath(), new Name(qualifierWithVersion, className), resource, methodCalls, mapper, resolver);
+		DependentGen dependent = new DependentGen(sourceDestinationFolder.toPath(), new Name(qualifierWithVersion, className), resource, methodCalls, mapper, paramResolver, respResolver);
 		dependent.create();
 	}
     

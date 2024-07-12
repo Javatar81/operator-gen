@@ -13,15 +13,20 @@ public class Configuration {
 	
 	private final Config config;
 	private final Map<String, String> pathParamMappings = new HashMap<>();
+	private final Map<String, String> pathResponseMappings = new HashMap<>();
 	private final Properties crdCustomizations;
 	
-	public Configuration(Config config, List<String> pathParamMappings, Properties crdCustomizations) {
+	public Configuration(Config config, List<String> pathParamMappings, List<String> pathResponseMappings, Properties crdCustomizations) {
 		this.config = config;
 		this.crdCustomizations = crdCustomizations;
 		pathParamMappings.stream()
 			.map(s -> s.split("="))
 			.filter(a -> a.length > 1)
 			.forEach(a -> this.pathParamMappings.put(a[0].trim(), a[1].trim()));
+		pathResponseMappings.stream()
+			.map(s -> s.split("="))
+			.filter(a -> a.length > 1)
+			.forEach(a -> this.pathResponseMappings.put(a[0].trim(), a[1].trim()));
 	}
 
 	public String getCrdVersion() {
@@ -38,6 +43,10 @@ public class Configuration {
 	
 	public Map<String, String> getPathParamMappings() {
 		return Collections.unmodifiableMap(this.pathParamMappings);
+	}
+	
+	public Map<String, String> getPathResponseMappings() {
+		return Collections.unmodifiableMap(this.pathResponseMappings);
 	}
 
 	public Config getConfig() {
